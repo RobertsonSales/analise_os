@@ -487,12 +487,18 @@
   </div>
   <section class="section-card" style="margin-bottom:1.5rem;">
     <div class="sc-header"><i class="fas fa-table"></i> Ordens de Serviço
-      <div style="margin-left:auto;min-width:210px;">
-        <select id="filterCobrado" style="padding:.4rem .65rem;border-radius:.5rem;border:1px solid var(--border);background:var(--bg-el);color:var(--text);font-size:.78rem;font-family:inherit;outline:none;width:100%;cursor:pointer;">
-          <option value="">Todos os registros</option>
-          <option value="nao">Não cobrados (elegíveis)</option>
-          <option value="sim">Já cobrados</option>
-        </select>
+      <div style="margin-left:auto;display:flex;align-items:center;gap:1rem;">
+        <label style="display:flex;align-items:center;gap:.4rem;font-size:.78rem;color:var(--muted);cursor:pointer;user-select:none;white-space:nowrap;" title="Marcar/desmarcar todos os registros exibidos como cobrados">
+          <input type="checkbox" id="selectAllCobrado" class="cobrado-check" onchange="toggleAllCobrado(this.checked)">
+          Marcar todos como cobrados
+        </label>
+        <div style="min-width:210px;">
+          <select id="filterCobrado" style="padding:.4rem .65rem;border-radius:.5rem;border:1px solid var(--border);background:var(--bg-el);color:var(--text);font-size:.78rem;font-family:inherit;outline:none;width:100%;cursor:pointer;">
+            <option value="">Todos os registros</option>
+            <option value="nao">Não cobrados (elegíveis)</option>
+            <option value="sim">Já cobrados</option>
+          </select>
+        </div>
       </div>
     </div>
     <div class="table-wrapper" style="max-height:520px;overflow-y:auto;"><table><thead id="tableHead"></thead><tbody id="tableBody"></tbody></table></div>
@@ -572,6 +578,26 @@
     if(cobFilter){applyFilters();return;}
     const row=document.querySelector(`tr[data-codigo="${CSS.escape(codigo)}"]`);
     if(row)row.classList.toggle('row-cobrado',checked);
+    updateSelectAllCobradoState();
+  }
+
+  /* Marca/desmarca como "cobrado" TODOS os registros atualmente exibidos (respeitando os filtros ativos) */
+  function toggleAllCobrado(checked){
+    if(!filteredData.length){const cb=document.getElementById('selectAllCobrado');if(cb){cb.checked=false;cb.indeterminate=false;}return;}
+    filteredData.forEach(d=>{const codigo=String(d.codigo);if(checked)cobradoSet.add(codigo);else cobradoSet.delete(codigo);});
+    saveCobradoStore();
+    const cobFilter=document.getElementById('filterCobrado')?document.getElementById('filterCobrado').value:'';
+    if(cobFilter)applyFilters();else renderTable();
+    showToast(checked?`${filteredData.length} OS marcada(s) como já cobrada(s)`:`${filteredData.length} OS desmarcada(s) como já cobrada(s)`,'success');
+  }
+
+  /* Sincroniza o estado (marcado / parcial / desmarcado) do checkbox "Marcar todos" com os registros exibidos */
+  function updateSelectAllCobradoState(){
+    const cb=document.getElementById('selectAllCobrado');if(!cb)return;
+    if(!filteredData.length){cb.checked=false;cb.indeterminate=false;return;}
+    const total=filteredData.length,cobradosCount=filteredData.filter(d=>isCobrado(d.codigo)).length;
+    cb.checked=cobradosCount===total;
+    cb.indeterminate=cobradosCount>0&&cobradosCount<total;
   }
 
   /* Carrossel da tela inicial */
@@ -1098,6 +1124,7 @@
     if(!pageData.length){tbody.innerHTML='<tr><td colspan="9" style="text-align:center;padding:2rem;color:var(--muted);">Nenhum registro</td></tr>';}
     else{tbody.innerHTML=pageData.map(d=>{const idx=allData.indexOf(d);const cats=d.categoria==='*'||!d.categoria?['Não especificado']:d.categoria.split(';').map(c=>c.trim()).filter(Boolean);const td=d.termos==='*'?'—':esc(d.termos);const cob=isCobrado(d.codigo);return`<tr data-codigo="${esc(d.codigo)}" class="${cob?'row-cobrado':''}"><td style="text-align:center"><input type="checkbox" class="cobrado-check" ${cob?'checked':''} onchange="toggleCobrado('${esc(String(d.codigo)).replace(/'/g,"\\'")}',this.checked)" title="Marcar OS como já cobrada"></td><td class="td-code">${esc(d.codigo)}</td><td>${formatDate(d.data)}</td><td title="${esc(d.cliente)}">${esc(d.cliente)}</td><td title="${esc(d.tecnico)}">${esc(d.tecnico)}</td><td>${esc(d.tipo)}</td><td><div class="td-cat">${cats.map(c=>`<span class="cat-pill${c==='Não especificado'?' ne':''}">${esc(c)}</span>`).join('')}</div></td><td title="${esc(d.termos==='*'?'':d.termos)}">${td}</td><td><button class="btn-detail" onclick="openDetailModal(${idx})"><i class="fas fa-eye"></i> Ver</button></td></tr>`;}).join('');}
     renderPagination(totalPages);
+    updateSelectAllCobradoState();
   }
   function sortBy(key){if(sortCol===key)sortAsc=!sortAsc;else{sortCol=key;sortAsc=true;}renderTable();}
   function renderPagination(tp){const pag=document.getElementById('pagination');if(tp<=1){pag.innerHTML='';return;}let b=`<button class="page-btn" onclick="goPage(${currentPage-1})" ${currentPage===1?'disabled':''}><i class="fas fa-chevron-left"></i></button>`;const range=[],delta=2;for(let i=1;i<=tp;i++)if(i===1||i===tp||(i>=currentPage-delta&&i<=currentPage+delta))range.push(i);let prev=0;range.forEach(i=>{if(prev&&i-prev>1)b+=`<span style="color:var(--muted);font-size:.75rem;padding:0 .25rem;">...</span>`;b+=`<button class="page-btn${i===currentPage?' active':''}" onclick="goPage(${i})">${i}</button>`;prev=i;});b+=`<button class="page-btn" onclick="goPage(${currentPage+1})" ${currentPage===tp?'disabled':''}><i class="fas fa-chevron-right"></i></button>`;pag.innerHTML=b;}
