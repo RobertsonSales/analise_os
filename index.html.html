@@ -448,6 +448,8 @@
   <header class="dash-header">
     <h1><i class="fas fa-microscope" style="color:var(--accent);margin-right:.4rem;font-size:1.1rem;"></i> GRUPO LABMEDIC -  <span>Análise de O.S. - Peças elegíveis à cobrança posterior</span></h1>
     <div class="header-actions">
+      <button class="btn btn-gold" onclick="gerarRelatorioPDF()"><i class="fas fa-file-pdf"></i> Relatório PDF</button>
+      <button class="btn" onclick="exportExcel()"><i class="fas fa-file-excel"></i> Exportar Excel</button>
       <button class="btn" onclick="exportCSV()"><i class="fas fa-download"></i> Exportar CSV</button>
       <button class="btn" onclick="reimport()"><i class="fas fa-sync-alt"></i> Reimportar</button>
     </div>
@@ -462,6 +464,12 @@
       <i class="fas fa-times-circle ac-clear" id="clienteClear" onclick="clearClienteSearch()"></i>
       <input type="hidden" id="filterCliente" value="">
       <div id="clienteSuggest" class="autocomplete-list"></div>
+    </div>
+    <div class="filter-group" style="position:relative;"><label><i class="fas fa-id-card"></i> CNPJ da Unidade</label>
+      <input type="text" id="filterCnpjSearch" autocomplete="off" placeholder="Digite o CNPJ ou parte dele...">
+      <i class="fas fa-times-circle ac-clear" id="cnpjClear" onclick="clearCnpjSearch()"></i>
+      <input type="hidden" id="filterCnpj" value="">
+      <div id="cnpjSuggest" class="autocomplete-list"></div>
     </div>
     <div class="filter-group"><label><i class="fas fa-user-cog"></i> Técnico Responsável</label><select id="filterTecnico"><option value="">Todos</option></select></div>
     <div class="filter-group"><label><i class="fas fa-clipboard-list"></i> Tipo da Tarefa</label><select id="filterTipo"><option value="">Todos</option></select></div>
@@ -581,6 +589,140 @@
   dropZone.addEventListener('drop',e=>{e.preventDefault();dropZone.classList.remove('drag-over');if(e.dataTransfer.files[0])handleFile(e.dataTransfer.files[0]);});
   dropZone.addEventListener('click',e=>{if(e.target===dropZone||e.target.parentElement===dropZone||e.target.parentElement.parentElement===dropZone)fileInput.click();});
 
+  /* =========================================
+     Motor de Análise de Evidências — Troca/Substituição de Peças
+     -----------------------------------------------------------
+     Fonte dos dados: aba 'Tarefas_Global', coluna 'Relato'
+     (equivalente à coluna AL da planilha original), texto livre
+     digitado pelo técnico ao final de cada atendimento.
+
+     Critério (baseado e ampliado a partir da aba 'Regras' da
+     planilha): considera-se evidência de troca/substituição de
+     peça quando, numa mesma frase do relato (ou em frase vizinha,
+     quando o objeto da troca é citado antes/depois da confirmação),
+     há a raiz 'troc-'/'troqu-' (troca, trocou, troquei, trocado...)
+     ou 'substitu-' (substituição, substituí, substituído...) junto
+     de uma palavra-chave de peça/componente de equipamento
+     laboratorial (agulha, cubeta, lâmpada, eletrodo, válvula,
+     cartão sensor, mangueira/tubulação, bomba, placa etc.).
+
+     Refinamentos aplicados (auditoria + engenharia):
+     • Correção ortográfica: 'trocar' muda 'c'→'qu' antes de e/i
+       (troquei, troque) — sem isso, várias trocas reais eram
+       perdidas pela raiz simples 'troc'.
+     • Negação: frases como 'não foi necessário trocar...' ou
+       'sem necessidade de substituição' são excluídas (não são
+       evidência de troca real).
+     • Pendência: frases como 'aguardando troca de peça' ou
+       'será substituído' indicam troca necessária/planejada e
+       ainda são reportadas, porém sinalizadas '(pendente)'.
+     • Contexto de frase vizinha: quando a ação (ex.: 'foi
+       substituída por uma nova') está em frase separada do nome
+       da peça (ex.: 'o conector estava danificado.'), o motor olha
+       a frase anterior/posterior para não perder a evidência.
+     • 'Equipamento (troca integral)' só é atribuído quando o verbo
+       de troca está gramaticalmente ligado a 'equipamento/aparelho/
+       máquina' (evita falso positivo em frases como 'troca do
+       segundo andar... equipamento ligado').
+     • Fallback 'Peça não especificada' preserva a evidência (ação
+       de troca/substituição confirmada) mesmo quando o item exato
+       não está no dicionário — maximiza a cobertura para revisão
+       humana, sem descartar nenhum indício.
+  ========================================= */
+  function semAcento(s){return String(s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');}
+
+  const RE_ACAO=/\b(?:troc\w*|troqu\w*|substitu\w*)\b/;
+  const RE_NEGACAO=/\bnao\s+(foi\s+)?(necess\w*|precis\w*)\b|\bnao\s+houve\s+necessidade\b|\bsem\s+necessidade\b|\bdispensad\w*\b|\bnao\s+necessit\w*\b/;
+  const RE_PENDENTE=/\bnao\s+(havia|ha)\b[^.]{0,25}\bpara\s+troc\w*\b|\baguardando\b|\baguarda\b|\bsera\s+(trocad\w*|substitu\w*)\b|\bnecessita\s+(de\s+)?(troc\w*|ser\s+substitu\w*)\b|\bsolicita\w*\s+a\s+troca\b|\bpendente\s+de\s+troca\b/;
+  const RE_EQUIP_COMPLETO=/\b(?:troc\w*|troqu\w*|substitu\w*)\s+(?:d[oa]s?\s+|de\s+|o\s+|a\s+)?(?:equipamento|aparelho|maquina)s?\b|\b(?:equipamento|aparelho|maquina)s?\s+(?:foi\s+|sera\s+|esta\s+sendo\s+)?(?:troc\w*|troqu\w*|substitu\w*)\b/;
+
+  /* Dicionário de peças/componentes — auditável e extensível.
+     Cada entrada: [nome da categoria exibida, regex sobre texto sem acento] */
+  const CATEGORIAS_PECA=[
+    ['Agulha/Ponteira',/\b(agulhas?|ponteiras?|probes?)\b/],
+    ['Cubeta/Curveta',/\b(cubetas?|curvetas?|curvetes?)\b/],
+    ['Lâmpada',/\blampadas?\b/],
+    ['Eletrodo',/\beletrodos?\b/],
+    ['Membrana',/\bmembranas?\b/],
+    ['Válvula',/\bvalvulas?\b/],
+    ['Cartão Sensor / Placa',/\bcarta(?:o|oes)\b|\bplacas?(?:\s+(?:eletronica|mae))?\b|\bpci\b/],
+    ['Sensor',/\bsensor(?:es)?\b/],
+    ['Mangueira/Tubulação',/\bmangueiras?\b|\btubulac(?:ao|oes)\b|\btubos?\b|\blinha\s*s\b/],
+    ['Correia',/\bcorreias?\b/],
+    ['Motor',/\bmotor(?:es)?\b/],
+    ['Bomba',/\bbombas?\b/],
+    ['Filtro',/\bfiltros?\b/],
+    ['Peltier',/\bpeltiers?\b|\bpeltires?\b/],
+    ['Bateria/No-break',/\bbaterias?\b|\bno[\s-]?break(?:s)?\b|\bups\b/],
+    ['Impressora',/\bimpressoras?\b/],
+    ['Seringa',/\bseringas?\b/],
+    ['Conexão/Conector/Pino',/\bconexa(?:o|oes)\b|\bconector(?:es)?\b|\bpinos?\b/],
+    ['Ventoinha/Cooler',/\bventoinhas?\b|\bcoolers?\b/],
+    ['Dobradiça/Trava',/\bdobradicas?\b|\btravas?\b/],
+    ['Cabo',/\bcabos?\b/],
+    ['Fusível',/\bfusiveis?\b|\bfusivel\b/],
+    ['Bico/Injetor',/\bbicos?\b|\binjetor(?:es)?\b/],
+    ['Monitor/Display',/\bmonitor(?:es)?\b|\bdisplay(?:s)?\b/],
+    ['Coluna (Cromatografia)',/\bcolunas?\b/],
+    ['Fonte de Alimentação',/\bfontes?\s+de\s+alimentacao\b/],
+    ['Insumo/Reagente (WR, Diluente, Calibrador)',/\bw\/?r\b|\bdiluentes?\b|\breagentes?\b|\bcalibrador(?:es)?\b|\bfrascos?\s+de\s+reagentes?\b|\bsolu(?:cao|coes)\s+(?:de\s+referencia|dos?\s+eletrodos?)\b|\bcq\b|\bgaloe?s?\b|\bcartuchos?\b/]
+  ];
+
+  function pecasNaFrase(fraseNorm){
+    const achadas=[],termos=[];
+    for(const[cat,re]of CATEGORIAS_PECA){const m=fraseNorm.match(re);if(m){achadas.push(cat);termos.push(m[0]);}}
+    return{achadas,termos};
+  }
+  function dividirFrases(texto){
+    const spans=[];let start=0;
+    for(let i=0;i<texto.length;i++){const c=texto[i];if(c==='.'||c===';'||c==='\n'||c==='\r'||c==='!'||c==='?'){if(i>start)spans.push(texto.slice(start,i).trim());start=i+1;}}
+    if(start<texto.length)spans.push(texto.slice(start).trim());
+    return spans.filter(Boolean);
+  }
+  /* Analisa o texto livre do 'Relato' e devolve as evidências de troca/substituição de peça:
+     categorias localizadas, termos que embasam a busca e trecho(s) de evidência para conferência. */
+  function analisarRelato(relato){
+    const texto=String(relato||'');
+    if(!texto.trim())return{categorias:[],termos:[],trecho:''};
+    const frasesOrig=dividirFrases(texto),frasesNorm=frasesOrig.map(semAcento);
+    const categorias=new Set(),termosSet=new Set(),trechos=[];
+    const n=frasesOrig.length;
+    for(let i=0;i<n;i++){
+      const fn=frasesNorm[i];
+      if(!RE_ACAO.test(fn))continue;
+      if(RE_NEGACAO.test(fn))continue;
+      const pendente=RE_PENDENTE.test(fn);
+      let{achadas,termos}=pecasNaFrase(fn);
+      let trechoFrases=[frasesOrig[i]];
+      if(!achadas.length&&i>0){const r=pecasNaFrase(frasesNorm[i-1]);if(r.achadas.length){achadas=r.achadas;termos=r.termos;trechoFrases=[frasesOrig[i-1],frasesOrig[i]];}}
+      if(!achadas.length&&i+1<n){const r=pecasNaFrase(frasesNorm[i+1]);if(r.achadas.length){achadas=r.achadas;termos=r.termos;trechoFrases=[frasesOrig[i],frasesOrig[i+1]];}}
+      if(!achadas.length)achadas=[RE_EQUIP_COMPLETO.test(fn)?'Equipamento (troca integral)':'Peça não especificada'];
+      const am=fn.match(RE_ACAO);if(am)termosSet.add(am[0]);
+      termos.forEach(t=>termosSet.add(t));
+      achadas.forEach(c=>categorias.add(pendente?c+' (pendente)':c));
+      trechos.push(trechoFrases.join(' '));
+    }
+    if(!categorias.size)return{categorias:[],termos:[],trecho:''};
+    let trecho=trechos.slice(0,3).join(' (...) ');
+    if(trechos.length>3)trecho+=` (+${trechos.length-3} trecho(s) adicional(is) — ver relato completo)`;
+    return{categorias:[...categorias],termos:[...termosSet],trecho};
+  }
+
+  /* Localiza a linha de cabeçalho verdadeira dentro das primeiras linhas da aba
+     (a base pode trazer título/filtros nas primeiras linhas, como em 'Tarefas_Global'). */
+  function detectarLinhaCabecalho(raw){
+    const max=Math.min(20,raw.length);
+    for(let i=0;i<max;i++){
+      const norm=(raw[i]||[]).map(h=>normStr(h));
+      const temCodigo=norm.some(h=>h==='codigo'),temData=norm.some(h=>h==='data');
+      const temRelato=norm.some(h=>h==='relato'),temCategoria=norm.some(h=>h.includes('categoria'));
+      if(temCodigo&&temData&&(temRelato||temCategoria))return i;
+    }
+    return 0;
+  }
+  function findColExact(headersNorm,names){for(const nm of names){const idx=headersNorm.indexOf(nm);if(idx!==-1)return idx;}return-1;}
+  function findColIncludes(headersNorm,subs){for(const sub of subs){const idx=headersNorm.findIndex(h=>h.includes(sub));if(idx!==-1)return idx;}return-1;}
+
   function handleFile(file){
     if(!file.name.match(/\.xlsx?$/i)){showToast('Formato inválido. Use .xlsx','error');return;}
     showToast('Processando arquivo...','info');
@@ -588,18 +730,53 @@
     reader.onload=function(e){
       try{
         const wb=XLSX.read(e.target.result,{type:'array',cellDates:true});
-        let sn=wb.SheetNames.find(n=>n.toLowerCase().includes('analit'));
-        if(!sn)sn=wb.SheetNames[0];
+        const normAba=n=>normStr(n).replace(/_/g,' ');
+        let sn=wb.SheetNames.find(n=>normAba(n).includes('tarefas global'))
+          ||wb.SheetNames.find(n=>normStr(n).includes('analit'))
+          ||wb.SheetNames[0];
         const ws=wb.Sheets[sn];
         const raw=XLSX.utils.sheet_to_json(ws,{header:1,defval:'',raw:false,dateNF:'yyyy/mm/dd'});
         if(raw.length<2){showToast('Aba vazia','error');return;}
-        const headers=raw[0].map(h=>String(h).trim().toLowerCase());
-        const mapN={CODIGO:['código da tarefa','codigo da tarefa'],DATA:['data'],CLIENTE:['cliente'],TECNICO:['técnico responsável','tecnico responsavel'],TIPO:['tipo da tarefa'],EQUIPAMENTO:['equipamento'],CATEGORIA:['categoria(s) de peça','categoria(s) de peca','categoria de peça','categoria de peca'],TERMOS:['termos localizados'],TRECHO:['trecho do relato'],RELATO:['relato completo'],LINK:['link da tarefa'],AUX:['nova combinação','aux']};
-        COL={};
-        for(const[key,aliases]of Object.entries(mapN)){const idx=headers.findIndex(h=>aliases.some(a=>h.includes(a)));if(idx!==-1)COL[key]=idx;}
-        if(COL.CODIGO===undefined)COL.CODIGO=0;if(COL.DATA===undefined)COL.DATA=1;if(COL.CLIENTE===undefined)COL.CLIENTE=2;if(COL.TECNICO===undefined)COL.TECNICO=3;if(COL.TIPO===undefined)COL.TIPO=4;if(COL.EQUIPAMENTO===undefined)COL.EQUIPAMENTO=5;if(COL.CATEGORIA===undefined)COL.CATEGORIA=6;if(COL.TERMOS===undefined)COL.TERMOS=7;if(COL.TRECHO===undefined)COL.TRECHO=8;if(COL.RELATO===undefined)COL.RELATO=9;if(COL.LINK===undefined)COL.LINK=10;
+        const headerRowIdx=detectarLinhaCabecalho(raw);
+        const headers=(raw[headerRowIdx]||[]).map(h=>normStr(h));
+        const dataRows=raw.slice(headerRowIdx+1);
+        const temRelato=headers.indexOf('relato')!==-1;
+        const temCategoria=headers.some(h=>h.includes('categoria'));
         allData=[];
-        for(let i=1;i<raw.length;i++){const r=raw[i];if(!r[COL.CODIGO]&&!r[COL.CLIENTE])continue;allData.push({codigo:String(r[COL.CODIGO]||'').trim(),data:parseDate(r[COL.DATA]),dataRaw:r[COL.DATA],cliente:String(r[COL.CLIENTE]||'').trim(),tecnico:String(r[COL.TECNICO]||'').trim(),tipo:String(r[COL.TIPO]||'').trim(),equipamento:String(r[COL.EQUIPAMENTO]||'').trim(),categoria:String(r[COL.CATEGORIA]||'').trim(),termos:String(r[COL.TERMOS]||'').trim(),trecho:String(r[COL.TRECHO]||'').trim(),relato:String(r[COL.RELATO]||'').trim(),link:String(r[COL.LINK]||'').trim()});}
+        if(temCategoria&&!temRelato){
+          /* ---- Modo legado: aba analítica já pré-processada (categoria/termos/trecho prontos) ---- */
+          const mapN={CODIGO:['codigo da tarefa','codigo'],DATA:['data'],CLIENTE:['cliente'],CNPJ:['cpf/cnpj do cliente','cpf cnpj do cliente','cnpj'],TECNICO:['tecnico responsavel','tecnico'],TIPO:['tipo da tarefa'],EQUIPAMENTO:['equipamento'],CATEGORIA:['categoria(s) de peca','categoria de peca','categoria(s)'],TERMOS:['termos localizados'],TRECHO:['trecho do relato'],RELATO:['relato completo'],LINK:['link da tarefa','link']};
+          COL={};
+          for(const[key,aliases]of Object.entries(mapN)){const idx=headers.findIndex(h=>aliases.some(a=>h.includes(a)));if(idx!==-1)COL[key]=idx;}
+          if(COL.CODIGO===undefined)COL.CODIGO=0;if(COL.DATA===undefined)COL.DATA=1;if(COL.CLIENTE===undefined)COL.CLIENTE=2;if(COL.TECNICO===undefined)COL.TECNICO=3;if(COL.TIPO===undefined)COL.TIPO=4;if(COL.EQUIPAMENTO===undefined)COL.EQUIPAMENTO=5;if(COL.CATEGORIA===undefined)COL.CATEGORIA=6;if(COL.TERMOS===undefined)COL.TERMOS=7;if(COL.TRECHO===undefined)COL.TRECHO=8;if(COL.RELATO===undefined)COL.RELATO=9;if(COL.LINK===undefined)COL.LINK=10;
+          for(let i=0;i<dataRows.length;i++){const r=dataRows[i];if(!r||(!r[COL.CODIGO]&&!r[COL.CLIENTE]))continue;allData.push({codigo:String(r[COL.CODIGO]||'').trim(),data:parseDate(r[COL.DATA]),dataRaw:r[COL.DATA],cliente:String(r[COL.CLIENTE]||'').trim(),cnpj:COL.CNPJ!==undefined?String(r[COL.CNPJ]||'').trim():'',tecnico:String(r[COL.TECNICO]||'').trim(),tipo:String(r[COL.TIPO]||'').trim(),equipamento:String(r[COL.EQUIPAMENTO]||'').trim(),categoria:String(r[COL.CATEGORIA]||'').trim(),termos:String(r[COL.TERMOS]||'').trim(),trecho:String(r[COL.TRECHO]||'').trim(),relato:String(r[COL.RELATO]||'').trim(),link:String(r[COL.LINK]||'').trim()});}
+        }else{
+          /* ---- Modo bruto: aba 'Tarefas_Global' (dados não tratados) ----
+             A categorização de troca/substituição de peça é calculada aqui,
+             em tempo real, a partir do texto livre da coluna 'Relato'
+             (equivalente à coluna AL da base original). Colunas localizadas
+             por nome do cabeçalho, com a posição AL/A/D/K/H/F/AQ/AU como
+             fallback caso os nomes tenham sido alterados. */
+          const idxCodigo=findColExact(headers,['codigo'])!==-1?findColExact(headers,['codigo']):0;
+          const idxData=findColExact(headers,['data'])!==-1?findColExact(headers,['data']):3;
+          const idxCliente=findColExact(headers,['cliente'])!==-1?findColExact(headers,['cliente']):10;
+          const idxTecnico=findColExact(headers,['responsavel'])!==-1?findColExact(headers,['responsavel']):7;
+          const idxTipo=findColIncludes(headers,['tipo da tarefa'])!==-1?findColIncludes(headers,['tipo da tarefa']):5;
+          const idxEquip=findColExact(headers,['equipamentos'])!==-1?findColExact(headers,['equipamentos']):42;
+          const idxLink=findColIncludes(headers,['os digital','link da tarefa','link'])!==-1?findColIncludes(headers,['os digital','link da tarefa','link']):46;
+          const idxCnpj=findColIncludes(headers,['cpf/cnpj do cliente','cpf cnpj do cliente','cnpj'])!==-1?findColIncludes(headers,['cpf/cnpj do cliente','cpf cnpj do cliente','cnpj']):13;
+          let idxRelato=findColExact(headers,['relato']);
+          if(idxRelato===-1)idxRelato=findColIncludes(headers,['relato']);
+          if(idxRelato===-1)idxRelato=37;
+          for(let i=0;i<dataRows.length;i++){
+            const r=dataRows[i];if(!r)continue;
+            const codigo=String(r[idxCodigo]||'').trim(),cliente=String(r[idxCliente]||'').trim();
+            if(!codigo&&!cliente)continue;
+            const relato=String(r[idxRelato]||'').trim();
+            const evid=analisarRelato(relato);
+            allData.push({codigo,data:parseDate(r[idxData]),dataRaw:r[idxData],cliente,cnpj:String(r[idxCnpj]||'').trim(),tecnico:String(r[idxTecnico]||'').trim(),tipo:String(r[idxTipo]||'').trim(),equipamento:String(r[idxEquip]||'').trim(),categoria:evid.categorias.join('; '),termos:evid.termos.join('; '),trecho:evid.trecho,relato,link:String(r[idxLink]||'').trim()});
+          }
+        }
         if(!allData.length){showToast('Nenhum dado válido','error');return;}
         filteredData=[...allData];populateDashboard();
         document.getElementById('importScreen').classList.add('hidden');document.getElementById('dashboardScreen').classList.add('active');
@@ -663,17 +840,18 @@
   }
   function fillSelect(id,items,allLabel){const sel=document.getElementById(id),val=sel.value;sel.innerHTML=`<option value="">${allLabel}</option>`+items.map(i=>`<option value="${esc(i)}">${esc(i)}</option>`).join('');sel.value=val;}
   function applyFilters(){
-    const ds=document.getElementById('filterDateStart').value,de=document.getElementById('filterDateEnd').value,fc=document.getElementById('filterCliente').value,ft=document.getElementById('filterTecnico').value,ftp=document.getElementById('filterTipo').value,search=document.getElementById('searchTermos').value.toLowerCase().trim();
+    const ds=document.getElementById('filterDateStart').value,de=document.getElementById('filterDateEnd').value,fc=document.getElementById('filterCliente').value,fcnpj=document.getElementById('filterCnpj').value,ft=document.getElementById('filterTecnico').value,ftp=document.getElementById('filterTipo').value,search=document.getElementById('searchTermos').value.toLowerCase().trim();
     const dateStart=ds?new Date(ds+'T00:00:00'):null,dateEnd=de?new Date(de+'T23:59:59'):null;
+    const fcnpjDigits=onlyDigits(fcnpj);
     filteredData=allData.filter(d=>{
       if(dateStart||dateEnd){if(!d.data||isNaN(d.data.getTime()))return false;if(dateStart&&d.data<dateStart)return false;if(dateEnd&&d.data>dateEnd)return false;}
-      if(fc&&d.cliente!==fc)return false;if(ft&&d.tecnico!==ft)return false;if(ftp&&d.tipo!==ftp)return false;
+      if(fc&&d.cliente!==fc)return false;if(fcnpjDigits&&onlyDigits(d.cnpj)!==fcnpjDigits)return false;if(ft&&d.tecnico!==ft)return false;if(ftp&&d.tipo!==ftp)return false;
       if(search){const t1=(d.termos==='*'?'':d.termos).toLowerCase(),t2=d.categoria.toLowerCase(),t3=d.trecho.toLowerCase();if(!t1.includes(search)&&!t2.includes(search)&&!t3.includes(search))return false;}
       return true;
     });
     currentPage=1;updateMetrics();renderSummaryByUnit();renderCategoryChart();renderTable();
   }
-  function clearFilters(){document.getElementById('filterDateStart').value='';document.getElementById('filterDateEnd').value='';document.getElementById('filterCliente').value='';document.getElementById('filterClienteSearch').value='';document.getElementById('clienteClear').classList.remove('show');document.getElementById('filterTecnico').value='';document.getElementById('filterTipo').value='';document.getElementById('searchTermos').value='';applyFilters();showToast('Filtros limpos','info');}
+  function clearFilters(){document.getElementById('filterDateStart').value='';document.getElementById('filterDateEnd').value='';document.getElementById('filterCliente').value='';document.getElementById('filterClienteSearch').value='';document.getElementById('clienteClear').classList.remove('show');document.getElementById('filterCnpj').value='';document.getElementById('filterCnpjSearch').value='';document.getElementById('cnpjClear').classList.remove('show');document.getElementById('filterTecnico').value='';document.getElementById('filterTipo').value='';document.getElementById('searchTermos').value='';applyFilters();showToast('Filtros limpos','info');}
 
   /* ---- Busca inteligente de Unidade (Cliente) ---- */
   function normStr(s){return String(s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim();}
@@ -780,9 +958,82 @@
     if(acActiveIdx>=0){items[acActiveIdx].classList.add('active');items[acActiveIdx].scrollIntoView({block:'nearest'});}
   });
   document.addEventListener('click',e=>{if(!e.target.closest('#filterClienteSearch')&&!e.target.closest('#clienteSuggest'))clienteSuggestBox.classList.remove('show');});
+
+  /* ---- Busca inteligente de CNPJ da Unidade ---- */
+  function onlyDigits(s){return String(s||'').replace(/\D+/g,'');}
+  function formatCnpj(v){const d=onlyDigits(v);if(d.length!==14)return String(v||'');return d.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/,'$1.$2.$3/$4-$5');}
+
+  let acCnpjActiveIdx=-1,acCnpjCurrentItems=[];
+  const cnpjSearchInput=document.getElementById('filterCnpjSearch'),cnpjSuggestBox=document.getElementById('cnpjSuggest'),cnpjClearBtn=document.getElementById('cnpjClear');
+
+  function cnpjEntries(){
+    const map={};
+    allData.forEach(d=>{const dig=onlyDigits(d.cnpj);if(!dig)return;if(!map[dig])map[dig]={cnpj:d.cnpj,cliente:d.cliente,count:0};map[dig].count++;});
+    return Object.values(map);
+  }
+
+  function renderCnpjSuggestions(query){
+    const entries=cnpjEntries();
+    const qDigits=onlyDigits(query);
+    let items;
+    if(qDigits){
+      items=entries.filter(i=>onlyDigits(i.cnpj).includes(qDigits)).map(i=>({...i,score:onlyDigits(i.cnpj).startsWith(qDigits)?900:500}));
+      items.sort((a,b)=>b.score-a.score||a.cnpj.localeCompare(b.cnpj));
+    }else if(query.trim()){
+      items=entries.map(i=>({...i,score:fuzzyScore(query,i.cliente)})).filter(i=>i.score!==null);
+      items.sort((a,b)=>b.score-a.score||a.cliente.localeCompare(b.cliente));
+    }else{
+      items=entries.map(i=>({...i,score:0}));
+      items.sort((a,b)=>b.count-a.count||a.cliente.localeCompare(b.cliente));
+    }
+    items=items.slice(0,30);
+    acCnpjCurrentItems=items;acCnpjActiveIdx=-1;
+    if(!items.length){cnpjSuggestBox.innerHTML='<div class="ac-empty">Nenhum CNPJ aproximado encontrado</div>';cnpjSuggestBox.classList.add('show');return;}
+    cnpjSuggestBox.innerHTML=items.map((i,idx)=>`<div class="ac-item" data-idx="${idx}" onmousedown="selectCnpj('${esc(i.cnpj).replace(/'/g,"\\'")}')"><span>${qDigits?esc(formatCnpj(i.cnpj)):highlightMatch(i.cliente,query)}<br><span style="font-size:.68rem;color:var(--muted);">${qDigits?esc(i.cliente):esc(formatCnpj(i.cnpj))}</span></span><span class="ac-count">${i.count} OS</span></div>`).join('');
+    cnpjSuggestBox.classList.add('show');
+  }
+
+  function selectCnpj(cnpj){
+    document.getElementById('filterCnpj').value=cnpj;
+    cnpjSearchInput.value=formatCnpj(cnpj);
+    cnpjClearBtn.classList.add('show');
+    cnpjSuggestBox.classList.remove('show');
+    applyFilters();
+  }
+
+  function clearCnpjSearch(){
+    document.getElementById('filterCnpj').value='';
+    cnpjSearchInput.value='';
+    cnpjClearBtn.classList.remove('show');
+    cnpjSuggestBox.classList.remove('show');
+    applyFilters();
+    cnpjSearchInput.focus();
+  }
+
+  cnpjSearchInput.addEventListener('input',()=>{
+    const v=cnpjSearchInput.value;
+    cnpjClearBtn.classList.toggle('show',v.length>0);
+    if(document.getElementById('filterCnpj').value&&onlyDigits(document.getElementById('filterCnpj').value)!==onlyDigits(v)){document.getElementById('filterCnpj').value='';applyFilters();}
+    renderCnpjSuggestions(v);
+  });
+  cnpjSearchInput.addEventListener('focus',()=>renderCnpjSuggestions(cnpjSearchInput.value));
+  cnpjSearchInput.addEventListener('keydown',e=>{
+    if(!cnpjSuggestBox.classList.contains('show'))return;
+    const items=cnpjSuggestBox.querySelectorAll('.ac-item');if(!items.length)return;
+    if(e.key==='ArrowDown'){e.preventDefault();acCnpjActiveIdx=Math.min(acCnpjActiveIdx+1,items.length-1);}
+    else if(e.key==='ArrowUp'){e.preventDefault();acCnpjActiveIdx=Math.max(acCnpjActiveIdx-1,0);}
+    else if(e.key==='Enter'){e.preventDefault();if(acCnpjActiveIdx>=0&&acCnpjCurrentItems[acCnpjActiveIdx])selectCnpj(acCnpjCurrentItems[acCnpjActiveIdx].cnpj);return;}
+    else if(e.key==='Escape'){cnpjSuggestBox.classList.remove('show');return;}
+    else return;
+    items.forEach(it=>it.classList.remove('active'));
+    if(acCnpjActiveIdx>=0){items[acCnpjActiveIdx].classList.add('active');items[acCnpjActiveIdx].scrollIntoView({block:'nearest'});}
+  });
+  document.addEventListener('click',e=>{if(!e.target.closest('#filterCnpjSearch')&&!e.target.closest('#cnpjSuggest'))cnpjSuggestBox.classList.remove('show');});
+
   document.getElementById('filterDateStart').addEventListener('change',applyFilters);
   document.getElementById('filterDateEnd').addEventListener('change',applyFilters);
   document.getElementById('filterCliente').addEventListener('change',applyFilters);
+  document.getElementById('filterCnpj').addEventListener('change',applyFilters);
   document.getElementById('filterTecnico').addEventListener('change',applyFilters);
   document.getElementById('filterTipo').addEventListener('change',applyFilters);
   let searchTimeout;document.getElementById('searchTermos').addEventListener('input',()=>{clearTimeout(searchTimeout);searchTimeout=setTimeout(applyFilters,300);});
@@ -842,7 +1093,7 @@
         <div class="di"><div class="dl">Tipo da Tarefa</div><div class="dv">${esc(d.tipo)}</div></div>
       </div>
       <div class="dg2">
-        <div class="di"><div class="dl">Cliente (Unidade)</div><div class="dv">${esc(d.cliente)}</div></div>
+        <div class="di"><div class="dl">Cliente (Unidade)</div><div class="dv">${esc(d.cliente)}${d.cnpj?`<div style="font-size:.68rem;color:var(--muted);margin-top:2px;font-weight:400;">CNPJ: ${esc(formatCnpj(d.cnpj))}</div>`:''}</div></div>
         <div class="di"><div class="dl">Técnico Responsável</div><div class="dv">${esc(d.tecnico)}</div></div>
       </div>
       <div class="dg2">
@@ -1073,13 +1324,182 @@
   /* Exportar CSV */
   function exportCSV(){
     if(!filteredData.length){showToast('Nenhum dado para exportar','error');return;}
-    const headers=['Código da Tarefa','Data','Cliente','Técnico Responsável','Tipo da Tarefa','Equipamento','Categoria(s)','Termos Localizados','Trecho do Relato','Relato Completo','Link'];
-    const rows=filteredData.map(d=>[d.codigo,formatDate(d.data),d.cliente,d.tecnico,d.tipo,d.equipamento==='*'?'':d.equipamento,d.categoria==='*'?'':d.categoria,d.termos==='*'?'':d.termos,d.trecho,d.relato,d.link]);
+    const headers=['Código da Tarefa','Data','Cliente','CNPJ','Técnico Responsável','Tipo da Tarefa','Equipamento','Categoria(s)','Termos Localizados','Trecho do Relato','Relato Completo','Link'];
+    const rows=filteredData.map(d=>[d.codigo,formatDate(d.data),d.cliente,d.cnpj?formatCnpj(d.cnpj):'',d.tecnico,d.tipo,d.equipamento==='*'?'':d.equipamento,d.categoria==='*'?'':d.categoria,d.termos==='*'?'':d.termos,d.trecho,d.relato,d.link]);
     let csv='\uFEFF'+headers.map(csvEsc).join(';')+'\n';rows.forEach(r=>{csv+=r.map(csvEsc).join(';')+'\n';});
     const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8;'}));a.download='analise_troca_pecas_filtrado.csv';a.click();
     showToast('CSV exportado!','success');
   }
   function csvEsc(v){const s=String(v||'');if(s.includes(';')||s.includes('"')||s.includes('\n'))return'"'+s.replace(/"/g,'""')+'"';return s;}
+
+  /* Exportar Excel (.xlsx) — usa a biblioteca SheetJS já carregada para leitura da planilha de origem */
+  function exportExcel(){
+    if(!filteredData.length){showToast('Nenhum dado para exportar','error');return;}
+    const headers=['Código da Tarefa','Data','Cliente','CNPJ','Técnico Responsável','Tipo da Tarefa','Equipamento','Categoria(s)','Termos Localizados','Trecho do Relato','Relato Completo','Link'];
+    const rows=filteredData.map(d=>[d.codigo,formatDate(d.data),d.cliente,d.cnpj?formatCnpj(d.cnpj):'',d.tecnico,d.tipo,d.equipamento==='*'?'':d.equipamento,d.categoria==='*'?'':d.categoria,d.termos==='*'?'':d.termos,d.trecho,d.relato,d.link]);
+    const ws=XLSX.utils.aoa_to_sheet([headers,...rows]);
+    ws['!cols']=[{wch:12},{wch:11},{wch:34},{wch:20},{wch:22},{wch:24},{wch:26},{wch:26},{wch:26},{wch:42},{wch:55},{wch:42}];
+    ws['!autofilter']={ref:XLSX.utils.encode_range({s:{r:0,c:0},e:{r:rows.length,c:headers.length-1}})};
+    ws['!freeze']={xSplit:0,ySplit:1};
+    const wb=XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb,ws,'Ordens de Serviço');
+    XLSX.writeFile(wb,'analise_troca_pecas_filtrado.xlsx');
+    showToast('Excel exportado!','success');
+  }
+
+  /* =========================================
+     Geração de PDF — Relatório de Ordens de Serviço (Listagem)
+     Documento HTML autônomo, A4 paisagem, com cabeçalho repetido em
+     todas as páginas (via <thead> de tabela), cards de resumo únicos
+     no topo e quebra de página inteligente (linhas nunca são
+     cortadas ao meio entre páginas).
+  ========================================= */
+  function gerarRelatorioPDF(){
+    if(!filteredData.length){showToast('Nenhum dado para gerar o relatório','error');return;}
+    if(filteredData.length>4000){showToast('Atenção: relatório com '+filteredData.length+' registros pode demorar para renderizar','info');}
+
+    const dados=[...filteredData].sort((a,b)=>{const va=a.data||new Date(0),vb=b.data||new Date(0);return va-vb;});
+
+    /* Cards de resumo */
+    const clientes=new Set(dados.map(d=>d.cliente).filter(Boolean));
+    const tecnicos=new Set(dados.map(d=>d.tecnico).filter(Boolean));
+    const cats=new Set();dados.forEach(d=>{if(d.categoria&&d.categoria!=='*'&&d.categoria!=='Não especificado')d.categoria.split(';').forEach(c=>{const t=c.trim();if(t)cats.add(t);});});
+    const datas=dados.map(d=>d.data).filter(d=>d&&!isNaN(d.getTime()));
+    const minDate=datas.length?new Date(Math.min(...datas)):null,maxDate=datas.length?new Date(Math.max(...datas)):null;
+    const periodo=(minDate&&maxDate)?formatDate(minDate)+' — '+formatDate(maxDate):'—';
+    const comEvidencia=dados.filter(d=>d.categoria&&d.categoria!=='*'&&d.categoria!=='Não especificado').length;
+
+    /* Resumo dos filtros aplicados, para constar no cabeçalho do relatório */
+    const ds=document.getElementById('filterDateStart').value,de=document.getElementById('filterDateEnd').value;
+    const fCliente=document.getElementById('filterCliente').value,fCnpj=document.getElementById('filterCnpj').value;
+    const fTecnico=document.getElementById('filterTecnico').value,fTipo=document.getElementById('filterTipo').value;
+    const fTermo=document.getElementById('searchTermos').value.trim();
+    const filtrosAtivos=[];
+    if(ds||de)filtrosAtivos.push('Período: '+(ds?new Date(ds+'T00:00:00').toLocaleDateString('pt-BR'):'início')+' – '+(de?new Date(de+'T00:00:00').toLocaleDateString('pt-BR'):'hoje'));
+    if(fCliente)filtrosAtivos.push('Unidade: '+fCliente);
+    if(fCnpj)filtrosAtivos.push('CNPJ: '+formatCnpj(fCnpj));
+    if(fTecnico)filtrosAtivos.push('Técnico: '+fTecnico);
+    if(fTipo)filtrosAtivos.push('Tipo: '+fTipo);
+    if(fTermo)filtrosAtivos.push('Busca: "'+fTermo+'"');
+    const filtrosTexto=filtrosAtivos.length?filtrosAtivos.join(' &bull; '):'Nenhum filtro aplicado — todos os registros importados';
+
+    const geradoEm=new Date().toLocaleString('pt-BR');
+    const NUM_COLS=8;
+
+    function linhaTabela(d){
+      const cats=(d.categoria==='*'||!d.categoria)?'Não especificado':d.categoria.split(';').map(c=>c.trim()).filter(Boolean).join(', ');
+      let termos=(d.termos==='*'||!d.termos)?'—':d.termos.split(';').map(t=>t.trim()).filter(Boolean).join(', ');
+      if(termos.length>90)termos=termos.substring(0,90)+'…';
+      const equip=(d.equipamento==='*'||!d.equipamento)?'—':d.equipamento;
+      return `<tr>
+        <td class="mono">${esc(d.codigo)}</td>
+        <td>${formatDate(d.data)}</td>
+        <td>${esc(d.cliente)}</td>
+        <td class="mono">${d.cnpj?esc(formatCnpj(d.cnpj)):'—'}</td>
+        <td>${esc(d.tecnico)}</td>
+        <td>${esc(d.tipo)}</td>
+        <td>${esc(equip)}</td>
+        <td><span class="cat-tag${cats==='Não especificado'?' ne':''}">${esc(cats)}</span></td>
+      </tr>`;
+    }
+
+    const html=`<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><title>Relatório de Ordens de Serviço — Grupo Labmedic</title>
+<style>
+  @page{size:A4 landscape;margin:8mm 10mm 12mm;}
+  *{margin:0;padding:0;box-sizing:border-box;}
+  body{font-family:'Segoe UI',Tahoma,Verdana,sans-serif;color:#1e293b;font-size:8pt;line-height:1.4;}
+
+  /* Cabeçalho repetido em todas as páginas (linha do thead) */
+  .banner{display:flex;justify-content:space-between;align-items:center;padding:6px 0 8px;border-bottom:2px solid #059669;}
+  .banner .b-left{display:flex;align-items:center;gap:8px;}
+  .banner .b-logo{width:26px;height:26px;border-radius:6px;background:#059669;color:#fff;display:flex;align-items:center;justify-content:center;font-size:12pt;flex-shrink:0;}
+  .banner .b-titles h1{font-size:11pt;color:#059669;font-weight:700;line-height:1.2;}
+  .banner .b-titles p{font-size:7.5pt;color:#64748b;margin-top:1px;}
+  .banner .b-right{text-align:right;font-size:7pt;color:#64748b;}
+  .banner .b-right strong{color:#1e293b;font-size:8pt;}
+  .filtros-line{font-size:7pt;color:#475569;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:4px;padding:4px 8px;margin:6px 0 8px;}
+  .col-hdr th{background:#059669;color:#fff;font-size:7pt;text-transform:uppercase;letter-spacing:.04em;padding:5px 7px;text-align:left;font-weight:700;}
+
+  /* Cards de resumo — aparecem uma única vez, no início do relatório */
+  .cards-wrap{padding:4px 0 10px;}
+  .cards-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;}
+  .card{background:#f8fafc;border:1px solid #e2e8f0;border-left:3px solid #059669;border-radius:6px;padding:8px 10px;}
+  .card .c-label{font-size:6.5pt;text-transform:uppercase;letter-spacing:.06em;color:#64748b;font-weight:700;margin-bottom:3px;}
+  .card .c-value{font-size:13pt;font-weight:700;color:#059669;line-height:1.1;}
+  .card .c-value.small{font-size:9pt;}
+
+  table.report-table{width:100%;border-collapse:collapse;}
+  tbody td{padding:4px 7px;border-bottom:1px solid #f1f5f9;vertical-align:top;font-size:7.5pt;}
+  tbody tr:nth-child(even){background:#fafbfc;}
+  td.mono{font-family:'Courier New',monospace;font-size:7pt;white-space:nowrap;}
+  .cat-tag{display:inline-block;background:#ecfdf5;color:#047857;border:1px solid #a7f3d0;border-radius:10px;padding:1px 7px;font-size:7pt;font-weight:600;}
+  .cat-tag.ne{background:#f1f5f9;color:#64748b;border-color:#e2e8f0;}
+
+  /* Quebra de página inteligente: nunca corta uma linha/cartão ao meio */
+  tr{page-break-inside:avoid;}
+  .cards-row{page-break-after:avoid;}
+  thead{display:table-header-group;}
+  tfoot{display:table-footer-group;}
+
+  .footer-note{text-align:center;font-size:6.5pt;color:#94a3b8;padding:6px 0;}
+
+  @media print{body{print-color-adjust:exact;-webkit-print-color-adjust:exact;}}
+</style></head><body>
+<table class="report-table">
+  <thead>
+    <tr><td colspan="${NUM_COLS}" style="padding:0;">
+      <div class="banner">
+        <div class="b-left">
+          <div class="b-logo">&#9877;</div>
+          <div class="b-titles">
+            <h1>GRUPO LABMEDIC — Assistência Técnica Laboratorial</h1>
+            <p>Relatório de Análise de Troca/Substituição de Peças — Ordens de Serviço</p>
+          </div>
+        </div>
+        <div class="b-right">
+          Gerado em <strong>${esc(geradoEm)}</strong><br>
+          <strong>${dados.length}</strong> registro(s) listado(s)
+        </div>
+      </div>
+      <div class="filtros-line"><strong>Filtros aplicados:</strong> ${filtrosTexto}</div>
+    </td></tr>
+    <tr class="col-hdr">
+      <th style="width:9%;">Código</th>
+      <th style="width:7%;">Data</th>
+      <th style="width:17%;">Cliente (Unidade)</th>
+      <th style="width:11%;">CNPJ</th>
+      <th style="width:12%;">Técnico</th>
+      <th style="width:13%;">Tipo da Tarefa</th>
+      <th style="width:14%;">Equipamento</th>
+      <th style="width:17%;">Categoria(s) de Peça</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr class="cards-row"><td colspan="${NUM_COLS}" style="padding:0;">
+      <div class="cards-wrap">
+        <div class="cards-grid">
+          <div class="card"><div class="c-label">Total de OS</div><div class="c-value">${dados.length}</div></div>
+          <div class="card"><div class="c-label">Com Evidência de Troca</div><div class="c-value">${comEvidencia}</div></div>
+          <div class="card"><div class="c-label">Unidades de Saúde</div><div class="c-value">${clientes.size}</div></div>
+          <div class="card"><div class="c-label">Técnicos Envolvidos</div><div class="c-value">${tecnicos.size}</div></div>
+          <div class="card"><div class="c-label">Período</div><div class="c-value small">${periodo}</div></div>
+        </div>
+      </div>
+    </td></tr>
+    ${dados.map(linhaTabela).join('')}
+  </tbody>
+  <tfoot>
+    <tr><td colspan="${NUM_COLS}"><div class="footer-note">Grupo Labmedic Comércio e Manutenção de Equipamentos Ltda &bull; Relatório gerado automaticamente pelo painel de Análise de O.S.</div></td></tr>
+  </tfoot>
+</table>
+<script>window.onload=function(){setTimeout(function(){window.print();},500);}<\/script>
+</body></html>`;
+
+    const blob=new Blob([html],{type:'text/html'});const url=URL.createObjectURL(blob);
+    const win=window.open(url,'_blank');
+    if(!win)showToast('Permita pop-ups para visualizar o relatório em PDF','error');
+    else showToast('Relatório gerado — use Ctrl+P para salvar em PDF','success');
+  }
 
   function reimport(){allData=[];filteredData=[];currentPage=1;document.getElementById('dashboardScreen').classList.remove('active');document.getElementById('importScreen').classList.remove('hidden');fileInput.value='';}
 
