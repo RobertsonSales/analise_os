@@ -67,6 +67,10 @@
   .drop-zone p{color:var(--muted);font-size:.78rem;line-height:1.4}
   .drop-zone .browse-btn{display:inline-block;margin-top:.65rem;padding:.5rem 1.1rem;background:var(--accent);color:#fff;border-radius:.5rem;font-weight:600;font-size:.78rem;cursor:pointer;transition:all .2s;position:relative;z-index:1;border:none;font-family:inherit}
   .drop-zone .browse-btn:hover{background:var(--accent-d);transform:translateY(-1px)}
+  .drop-zone .btn-row{display:flex;align-items:center;gap:.6rem;margin-top:.65rem;flex-wrap:wrap}
+  .drop-zone .btn-row .browse-btn{margin-top:0}
+  .drop-zone .tutorial-btn{display:inline-flex;align-items:center;gap:.4rem;padding:.5rem 1rem;background:transparent;color:var(--accent-l);border-radius:.5rem;font-weight:600;font-size:.78rem;cursor:pointer;transition:all .2s;position:relative;z-index:1;border:1px solid rgba(16,185,129,.4);font-family:inherit;text-decoration:none}
+  .drop-zone .tutorial-btn:hover{background:var(--accent-glow);border-color:var(--accent);transform:translateY(-1px)}
   .dz-hint{margin-top:.7rem;font-size:.68rem;color:var(--muted);display:flex;align-items:center;gap:.4rem;font-family:'Space Mono',monospace}
   .dz-hint i{color:var(--accent-l)}
 
@@ -361,7 +365,10 @@
           <div class="dz-body">
             <h2>Arraste o arquivo XLSX aqui</h2>
             <p>ou clique no botão abaixo para selecionar</p>
-            <button class="browse-btn" id="browseBtn">Selecionar Arquivo</button>
+            <div class="btn-row">
+              <button class="browse-btn" id="browseBtn">Selecionar Arquivo</button>
+              <a class="tutorial-btn" id="tutorialBtn" href="https://robertsonsales.github.io/tutorial_Analise_OS/" target="_blank" rel="noopener noreferrer" onclick="event.stopPropagation();"><i class="fas fa-circle-question"></i> Ver Tutorial</a>
+            </div>
           </div>
           <input type="file" id="fileInput" accept=".xlsx,.xls" style="display:none;">
         </div>
