@@ -6,6 +6,10 @@
 <title>Grupo Labmedic - Análise de Troca de Peças — Dashboard</title>
 <script src="https://cdn.tailwindcss.com"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<!-- CORRECAO: guarda a referencia da biblioteca SheetJS de LEITURA antes que o bundle xlsx-js-style sobrescreva o global XLSX (usado apenas para EXPORTACAO estilizada) -->
+<script>window.XLSX_READ=window.XLSX;</script>
+<!-- Camada de estilos para as planilhas .xlsx exportadas (mesma API do SheetJS, com suporte a cores, bordas e formatos numericos) -->
+<script src="https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js"></script>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
 <style>
@@ -639,6 +643,10 @@
           </select>
         </div>
         <div class="form-group">
+          <label>Equipamento que Recebeu a Assistência Técnica</label>
+          <input type="text" id="billingEquipamento" placeholder="Informe o equipamento que recebeu a assistência técnica">
+        </div>
+        <div class="form-group">
           <label>Nome de Quem Passa as Instruções</label>
           <input type="text" id="billingNome" placeholder="Informe o nome completo">
         </div>
@@ -700,6 +708,21 @@
 <div class="toast-container" id="toastContainer"></div>
 
 <script>
+  /* Importação — vinculado ANTES de qualquer outra inicialização (carrossel, etc.)
+     para garantir que o botão/drag-and-drop de upload funcione mesmo que alguma
+     outra parte da tela falhe ao iniciar. */
+  try{
+    const dropZone=document.getElementById('dropZone'),fileInput=document.getElementById('fileInput'),browseBtn=document.getElementById('browseBtn');
+    if(dropZone&&fileInput&&browseBtn){
+      browseBtn.addEventListener('click',e=>{e.stopPropagation();fileInput.click();});
+      fileInput.addEventListener('change',e=>{if(e.target.files[0])handleFile(e.target.files[0]);});
+      dropZone.addEventListener('dragover',e=>{e.preventDefault();dropZone.classList.add('drag-over');});
+      dropZone.addEventListener('dragleave',()=>dropZone.classList.remove('drag-over'));
+      dropZone.addEventListener('drop',e=>{e.preventDefault();dropZone.classList.remove('drag-over');if(e.dataTransfer.files[0])handleFile(e.dataTransfer.files[0]);});
+      dropZone.addEventListener('click',e=>{if(e.target===dropZone||e.target.parentElement===dropZone||e.target.parentElement.parentElement===dropZone)fileInput.click();});
+    }
+  }catch(errImport){console.error('Falha ao inicializar a área de importação:',errImport);}
+
   let allData=[],filteredData=[],chartBaseData=[],currentPage=1;
   /* Categoria selecionada no quadro 'Top Categorias de Peça' (barra funciona como filtro) */
   let catFilter='';
@@ -775,7 +798,7 @@
     dots.forEach((d,idx)=>d.classList.toggle('active',idx===carIdx));
   }
   function carNav(dir){stopCarAutoplay();carGoTo(carIdx+dir);startCarAutoplay();}
-  initCarousel();
+  try{initCarousel();}catch(errCarousel){console.error('Falha ao iniciar o carrossel (não afeta a importação):',errCarousel);}
   const PAGE_SIZE=15;
   let sortCol='data',sortAsc=false,COL={},currentBillingIdx=-1;
   const billingStore={};
@@ -783,15 +806,6 @@
     'LABMEDIC':{nome:'LABMEDIC COMÉRCIO E MANUTENÇÃO DE EQUIPAMENTOS LTDA',cnpj:'21.947.632/0001-37'},
     'DIAG RIO':{nome:'DIAG RIO PRODUTOS PARA LABORATÓRIOS LTDA',cnpj:'14.878.232/0001-51'}
   };
-
-  /* Importação */
-  const dropZone=document.getElementById('dropZone'),fileInput=document.getElementById('fileInput'),browseBtn=document.getElementById('browseBtn');
-  browseBtn.addEventListener('click',e=>{e.stopPropagation();fileInput.click();});
-  fileInput.addEventListener('change',e=>{if(e.target.files[0])handleFile(e.target.files[0]);});
-  dropZone.addEventListener('dragover',e=>{e.preventDefault();dropZone.classList.add('drag-over');});
-  dropZone.addEventListener('dragleave',()=>dropZone.classList.remove('drag-over'));
-  dropZone.addEventListener('drop',e=>{e.preventDefault();dropZone.classList.remove('drag-over');if(e.dataTransfer.files[0])handleFile(e.dataTransfer.files[0]);});
-  dropZone.addEventListener('click',e=>{if(e.target===dropZone||e.target.parentElement===dropZone||e.target.parentElement.parentElement===dropZone)fileInput.click();});
 
   /* =========================================
      Motor de Análise de Evidências — Troca/Substituição de Peças
@@ -919,9 +933,16 @@
     const max=Math.min(20,raw.length);
     for(let i=0;i<max;i++){
       const norm=(raw[i]||[]).map(h=>normStr(h));
-      const temCodigo=norm.some(h=>h==='codigo'),temData=norm.some(h=>h==='data');
-      const temRelato=norm.some(h=>h==='relato'),temCategoria=norm.some(h=>h.includes('categoria'));
+      const temCodigo=norm.some(h=>h.includes('codigo')),temData=norm.some(h=>h==='data'||h.includes('data de')||h.includes('data da')||h.startsWith('data '));
+      const temRelato=norm.some(h=>h.includes('relato')),temCategoria=norm.some(h=>h.includes('categoria'));
       if(temCodigo&&temData&&(temRelato||temCategoria))return i;
+    }
+    /* Nenhuma linha bateu com todos os critérios (código+data+relato/categoria).
+       Fallback: usa a primeira linha que ao menos tenha uma coluna de código,
+       em vez de assumir cegamente a linha 0 (que pode ser título/filtro). */
+    for(let i=0;i<max;i++){
+      const norm=(raw[i]||[]).map(h=>normStr(h));
+      if(norm.some(h=>h.includes('codigo')))return i;
     }
     return 0;
   }
@@ -936,20 +957,24 @@
 
   async function handleFile(file){
     if(!file.name.match(/\.xlsx?$/i)){showToast('Formato inválido. Use .xlsx','error');return;}
+    if(typeof XLSX_READ==='undefined'||!XLSX_READ||typeof XLSX_READ.read!=='function'){
+      showToast('Biblioteca de leitura de planilhas não carregou (verifique sua conexão com a internet e recarregue a página)','error');
+      return;
+    }
     progShow();
     const reader=new FileReader();
     reader.onerror=function(){progHide();showToast('Falha ao ler o arquivo','error');};
     reader.onload=async function(e){
       try{
         progSet(12,'Lendo arquivo...');await nextFrame();
-        const wb=XLSX.read(e.target.result,{type:'array',cellDates:true});
+        const wb=XLSX_READ.read(e.target.result,{type:'array',cellDates:true});
         progSet(30,'Planilha carregada, localizando dados...');await nextFrame();
         const normAba=n=>normStr(n).replace(/_/g,' ');
         let sn=wb.SheetNames.find(n=>normAba(n).includes('tarefas global'))
           ||wb.SheetNames.find(n=>normStr(n).includes('analit'))
           ||wb.SheetNames[0];
         const ws=wb.Sheets[sn];
-        const raw=XLSX.utils.sheet_to_json(ws,{header:1,defval:'',raw:false,dateNF:'yyyy/mm/dd'});
+        const raw=XLSX_READ.utils.sheet_to_json(ws,{header:1,defval:'',raw:false,dateNF:'yyyy/mm/dd'});
         if(raw.length<2){showToast('Aba vazia','error');return;}
         const headerRowIdx=detectarLinhaCabecalho(raw);
         const headers=(raw[headerRowIdx]||[]).map(h=>normStr(h));
@@ -972,12 +997,14 @@
              (equivalente à coluna AL da base original). Colunas localizadas
              por nome do cabeçalho, com a posição AL/A/D/K/H/F/AQ/AU como
              fallback caso os nomes tenham sido alterados. */
-          const idxCodigo=findColExact(headers,['codigo'])!==-1?findColExact(headers,['codigo']):0;
-          const idxData=findColExact(headers,['data'])!==-1?findColExact(headers,['data']):3;
-          const idxCliente=findColExact(headers,['cliente'])!==-1?findColExact(headers,['cliente']):10;
-          const idxTecnico=findColExact(headers,['responsavel'])!==-1?findColExact(headers,['responsavel']):7;
-          const idxTipo=findColIncludes(headers,['tipo da tarefa'])!==-1?findColIncludes(headers,['tipo da tarefa']):5;
-          const idxEquip=findColExact(headers,['equipamentos'])!==-1?findColExact(headers,['equipamentos']):42;
+          const idxCodigo=findColIncludes(headers,['codigo'])!==-1?findColIncludes(headers,['codigo']):0;
+          let idxData=findColExact(headers,['data']);
+          if(idxData===-1)idxData=findColIncludes(headers,['data de','data da','data ']);
+          if(idxData===-1)idxData=3;
+          const idxCliente=findColIncludes(headers,['cliente'])!==-1?findColIncludes(headers,['cliente']):10;
+          const idxTecnico=findColIncludes(headers,['responsavel','tecnico'])!==-1?findColIncludes(headers,['responsavel','tecnico']):7;
+          const idxTipo=findColIncludes(headers,['tipo da tarefa','tipo'])!==-1?findColIncludes(headers,['tipo da tarefa','tipo']):5;
+          const idxEquip=findColIncludes(headers,['equipamento'])!==-1?findColIncludes(headers,['equipamento']):42;
           const idxLink=findColIncludes(headers,['os digital','link da tarefa','link'])!==-1?findColIncludes(headers,['os digital','link da tarefa','link']):46;
           const idxCnpj=findColIncludes(headers,['cpf/cnpj do cliente','cpf cnpj do cliente','cnpj'])!==-1?findColIncludes(headers,['cpf/cnpj do cliente','cpf cnpj do cliente','cnpj']):13;
           let idxRelato=findColExact(headers,['relato']);
@@ -1456,6 +1483,10 @@
   /* =========================================
      Modal de Cobrança
   ========================================= */
+  /* Valores padrão das instruções de cobrança */
+  const BILLING_DEFAULT_NOME='Direção – Núcleo Comercial';
+  const BILLING_DEFAULT_JUSTIFICATIVA='A presente fatura foi emitida em razão da troca de peças/serviços prestados para esta unidade, conforme ordens de serviço em poder das partes.';
+
   function openBillingModal(idx){
     currentBillingIdx=idx;const d=allData[idx];if(!d)return;
     const equip=d.equipamento==='*'?'Não informado':d.equipamento||'Não informado';
@@ -1467,19 +1498,20 @@
         <div><span style="color:var(--muted);">Técnico:</span> <strong>${esc(d.tecnico)}</strong></div>
         <div style="grid-column:1/-1;"><span style="color:var(--muted);">Equip.:</span> <strong>${esc(equip)}</strong></div>
       </div>`;
-    const saved=billingStore[d.codigo];
-    document.getElementById('billingEmpresa').value=saved?saved.empresa:'LABMEDIC';
-    document.getElementById('billingNome').value=saved?saved.nome:'';
-    document.getElementById('billingJustificativa').value=saved?saved.justificativa:'';
-    document.getElementById('billingValorServico').value=saved?saved.valorServico:'';
-    document.getElementById('billingValorPecas').value=saved?saved.valorPecas:'';
+    const saved=billingStore[d.codigo]||{};
+    document.getElementById('billingEmpresa').value=saved.empresa||'LABMEDIC';
+    document.getElementById('billingEquipamento').value=saved.equipamento||((d.equipamento&&d.equipamento!=='*')?d.equipamento:'');
+    document.getElementById('billingNome').value=saved.nome||BILLING_DEFAULT_NOME;
+    document.getElementById('billingJustificativa').value=saved.justificativa||BILLING_DEFAULT_JUSTIFICATIVA;
+    document.getElementById('billingValorServico').value=saved.valorServico||'';
+    document.getElementById('billingValorPecas').value=saved.valorPecas||'';
     document.getElementById('billingModal').classList.add('active');
   }
 
   function closeBillingModal(){
     if(currentBillingIdx>=0){
       const d=allData[currentBillingIdx];
-      billingStore[d.codigo]={empresa:document.getElementById('billingEmpresa').value,nome:document.getElementById('billingNome').value,justificativa:document.getElementById('billingJustificativa').value,valorServico:document.getElementById('billingValorServico').value,valorPecas:document.getElementById('billingValorPecas').value};
+      billingStore[d.codigo]={empresa:document.getElementById('billingEmpresa').value,equipamento:document.getElementById('billingEquipamento').value,nome:document.getElementById('billingNome').value,justificativa:document.getElementById('billingJustificativa').value,valorServico:document.getElementById('billingValorServico').value,valorPecas:document.getElementById('billingValorPecas').value};
     }
     document.getElementById('billingModal').classList.remove('active');
   }
@@ -1490,14 +1522,14 @@
   function generatePDF(){
     if(currentBillingIdx<0)return;
     const d=allData[currentBillingIdx];
-    const billing={empresa:document.getElementById('billingEmpresa').value,nome:document.getElementById('billingNome').value.trim(),justificativa:document.getElementById('billingJustificativa').value.trim(),valorServico:document.getElementById('billingValorServico').value,valorPecas:document.getElementById('billingValorPecas').value};
+    const billing={empresa:document.getElementById('billingEmpresa').value,equipamento:document.getElementById('billingEquipamento').value.trim(),nome:document.getElementById('billingNome').value.trim(),justificativa:document.getElementById('billingJustificativa').value.trim(),valorServico:document.getElementById('billingValorServico').value,valorPecas:document.getElementById('billingValorPecas').value};
     billingStore[d.codigo]=billing;
     if(!billing.nome){showToast('Informe o nome de quem passa as instruções','error');document.getElementById('billingNome').focus();return;}
 
     const emp=EMPRESAS[billing.empresa]||EMPRESAS['LABMEDIC'];
     const cats=d.categoria==='*'||!d.categoria?'Não especificado':d.categoria;
     const termos=d.termos==='*'||!d.termos?'Não especificado':d.termos;
-    const equip=d.equipamento==='*'?'Não informado':d.equipamento||'Não informado';
+    const equip=billing.equipamento||(d.equipamento==='*'?'Não informado':d.equipamento||'Não informado');
     const vs=billing.valorServico?parseFloat(billing.valorServico):0;
     const vp=billing.valorPecas?parseFloat(billing.valorPecas):0;
     const total=vs+vp;
@@ -1593,7 +1625,7 @@
       <div class="ib-row"><span class="ib-label">OS:</span><span class="ib-val" style="font-family:monospace;">${esc(d.codigo)}</span></div>
       <div class="ib-row"><span class="ib-label">Data:</span><span class="ib-val">${formatDate(d.data)}</span></div>
       <div class="ib-row"><span class="ib-label">Tipo:</span><span class="ib-val">${esc(d.tipo)}</span></div>
-      <div class="ib-row"><span class="ib-label">Equip.:</span><span class="ib-val">${esc(equip)}</span></div>
+      <div class="ib-row"><span class="ib-label">Equip. Assistido:</span><span class="ib-val">${esc(equip)}</span></div>
     </div>
   </div>
 
@@ -1658,15 +1690,42 @@
   }
   function csvEsc(v){const s=String(v||'');if(s.includes(';')||s.includes('"')||s.includes('\n'))return'"'+s.replace(/"/g,'""')+'"';return s;}
 
-  /* Exportar Excel (.xlsx) — usa a biblioteca SheetJS já carregada para leitura da planilha de origem */
+  /* Exportar Excel (.xlsx) — estrutura e estilo profissionais (titulo institucional, cabecalho colorido, zebra, bordas) */
   function exportExcel(){
     if(!filteredData.length){showToast('Nenhum dado para exportar','error');return;}
     const headers=['Código da Tarefa','Data','Cliente','CNPJ','Técnico Responsável','Tipo da Tarefa','Equipamento','Categoria(s)','Termos Localizados','Trecho do Relato','Relato Completo','Link'];
+    const NCOL=headers.length,LCOL=XLSX.utils.encode_col(NCOL-1);
     const rows=filteredData.map(d=>[d.codigo,formatDate(d.data),d.cliente,d.cnpj?formatCnpj(d.cnpj):'',d.tecnico,d.tipo,d.equipamento==='*'?'':d.equipamento,d.categoria==='*'?'':d.categoria,d.termos==='*'?'':d.termos,d.trecho,d.relato,d.link]);
-    const ws=XLSX.utils.aoa_to_sheet([headers,...rows]);
-    ws['!cols']=[{wch:12},{wch:11},{wch:34},{wch:20},{wch:22},{wch:24},{wch:26},{wch:26},{wch:26},{wch:42},{wch:55},{wch:42}];
-    ws['!autofilter']={ref:XLSX.utils.encode_range({s:{r:0,c:0},e:{r:rows.length,c:headers.length-1}})};
-    ws['!freeze']={xSplit:0,ySplit:1};
+    const titulo=[
+      ['GRUPO LABMEDIC — Análise de Troca de Peças'],
+      ['Relatório de Ordens de Serviço — listagem filtrada ('+filteredData.length+' registro(s))'],
+      ['Gerado em: '+new Date().toLocaleString('pt-BR')],
+      []];
+    const ws=XLSX.utils.aoa_to_sheet([...titulo,headers,...rows]);
+    ws['!cols']=[{wch:15},{wch:11},{wch:34},{wch:20},{wch:24},{wch:26},{wch:28},{wch:26},{wch:26},{wch:46},{wch:60},{wch:42}];
+    ws['!merges']=[0,1,2].map(r=>({s:{r,c:0},e:{r,c:NCOL-1}}));
+    ws['!rows']=[{hpt:26},{hpt:15},{hpt:15},{hpt:6},{hpt:30}];
+    const hdrRow=titulo.length;
+    ws['!autofilter']={ref:XLSX.utils.encode_range({s:{r:hdrRow,c:0},e:{r:hdrRow+rows.length,c:NCOL-1}})};
+    ws['!freeze']={xSplit:0,ySplit:hdrRow+1};
+    /* Paleta institucional (verde Labmedic) */
+    const VERDE_ESC='065F46',VERDE='059669',VERDE_BORDA='047857',CINZA_BORDA='D9E2EC',ZEBRA='F4F8F7',TEXTO='1F2937';
+    const borda={top:{style:'thin',color:{rgb:CINZA_BORDA}},bottom:{style:'thin',color:{rgb:CINZA_BORDA}},left:{style:'thin',color:{rgb:CINZA_BORDA}},right:{style:'thin',color:{rgb:CINZA_BORDA}}};
+    const setCell=(addr,style)=>{if(ws[addr])ws[addr].s=style;};
+    /* Titulo institucional */
+    for(let c=0;c<NCOL;c++){
+      setCell(XLSX.utils.encode_cell({r:0,c}),{font:{bold:true,sz:14,color:{rgb:'FFFFFF'}},fill:{fgColor:{rgb:VERDE_ESC}},alignment:{horizontal:'left',vertical:'center'}});
+      setCell(XLSX.utils.encode_cell({r:1,c}),{font:{italic:true,sz:10,color:{rgb:'475569'}},fill:{fgColor:{rgb:'F8FAFC'}},alignment:{horizontal:'left',vertical:'center'}});
+      setCell(XLSX.utils.encode_cell({r:2,c}),{font:{sz:9,color:{rgb:'64748B'}},fill:{fgColor:{rgb:'F8FAFC'}},alignment:{horizontal:'left',vertical:'center'}});
+    }
+    /* Cabecalho das colunas */
+    headers.forEach((_,c)=>setCell(XLSX.utils.encode_cell({r:hdrRow,c}),{font:{bold:true,sz:10,color:{rgb:'FFFFFF'}},fill:{fgColor:{rgb:VERDE}},alignment:{horizontal:'center',vertical:'center',wrapText:true},border:{top:{style:'thin',color:{rgb:VERDE_BORDA}},bottom:{style:'thin',color:{rgb:VERDE_BORDA}},left:{style:'thin',color:{rgb:VERDE_BORDA}},right:{style:'thin',color:{rgb:VERDE_BORDA}}}}));
+    /* Dados: zebra, bordas finas e quebra de texto nas colunas longas */
+    const wrapCols={8:1,9:1,10:1,11:1};
+    rows.forEach((_,i)=>{const r=hdrRow+1+i,zebra=i%2===1;
+      for(let c=0;c<NCOL;c++){
+        setCell(XLSX.utils.encode_cell({r,c}),{font:{sz:10,color:{rgb:TEXTO}},fill:zebra?{fgColor:{rgb:ZEBRA}}:undefined,alignment:{vertical:'top',wrapText:!!wrapCols[c]},border:borda});
+      }});
     const wb=XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb,ws,'Ordens de Serviço');
     XLSX.writeFile(wb,'analise_troca_pecas_filtrado.xlsx');
@@ -1856,7 +1915,7 @@
   function valoresCobranca(d){
     const b=billingStore[d.codigo]||{};
     const vs=parseFloat(b.valorServico||0)||0,vp=parseFloat(b.valorPecas||0)||0;
-    return {servico:vs,pecas:vp,total:vs+vp,empresa:b.empresa||'',responsavel:b.nome||'',justificativa:b.justificativa||''};
+    return {servico:vs,pecas:vp,total:vs+vp,empresa:b.empresa||'',responsavel:b.nome||'',justificativa:b.justificativa||'',equipamento:b.equipamento||''};
   }
   function moedaBR(v){return v.toLocaleString('pt-BR',{style:'currency',currency:'BRL'});}
 
@@ -1874,7 +1933,7 @@
     document.getElementById('pricesConfirmBtn').innerHTML=action==='pdf'?'<i class="fas fa-file-pdf"></i> Gerar PDF':'<i class="fas fa-file-excel"></i> Gerar planilha';
     document.getElementById('pricesBody').innerHTML=dados.map((d,i)=>{
       const b=billingStore[d.codigo]||{};
-      const equip=(d.equipamento==='*'||!d.equipamento)?'\u2014':d.equipamento;
+      const equip=(b.equipamento||((d.equipamento==='*'||!d.equipamento)?'':d.equipamento))||'\u2014';
       const cats=(d.categoria==='*'||!d.categoria)?'N\u00e3o especificado':d.categoria.split(';').map(c=>c.trim()).filter(Boolean).join(', ');
       return `<tr data-i="${i}">
         <td class="mono">${esc(d.codigo)}</td>
@@ -1950,7 +2009,7 @@
     rows.forEach(tr=>{
       const d=pricesData[parseInt(tr.dataset.i,10)];if(!d)return;
       const prev=billingStore[d.codigo]||{};
-      billingStore[d.codigo]={...prev,valorPecas:String(parseMoedaBR(tr.querySelector('.pr-pecas').value)),valorServico:String(parseMoedaBR(tr.querySelector('.pr-servico').value)),empresa:prev.empresa||'LABMEDIC',nome:prev.nome||'',justificativa:prev.justificativa||''};
+      billingStore[d.codigo]={...prev,valorPecas:String(parseMoedaBR(tr.querySelector('.pr-pecas').value)),valorServico:String(parseMoedaBR(tr.querySelector('.pr-servico').value)),empresa:prev.empresa||'LABMEDIC',nome:prev.nome||BILLING_DEFAULT_NOME,justificativa:prev.justificativa||BILLING_DEFAULT_JUSTIFICATIVA};
     });
     const action=pricesAction;
     esconderErroPrecos();
@@ -1962,29 +2021,57 @@
   function exportarExcelCobrancasDoc(){
     const dados=registrosCobranca();
     if(!dados.length){showToast('Nenhum registro marcado para cobran\u00e7a neste recorte','error');return;}
-    const headers=['C\u00f3digo da Tarefa','Data da O.S.','Marcado em','Unidade de Sa\u00fade','CNPJ','T\u00e9cnico Respons\u00e1vel','Tipo da Tarefa','Equipamento','Categoria(s) de Pe\u00e7a','Termos Localizados','Empresa Faturante','Instru\u00e7\u00f5es por','Valor Servi\u00e7o (R$)','Valor Pe\u00e7as (R$)','Total (R$)','Justificativa','Link'];
+    /* Coluna adicional: equipamento que recebeu a assistencia tecnica (editavel no modal de cobranca) */
+    const headers=['C\u00f3digo da Tarefa','Data da O.S.','Marcado em','Unidade de Sa\u00fade','CNPJ','T\u00e9cnico Respons\u00e1vel','Tipo da Tarefa','Equipamento','Equipamento Assistido','Categoria(s) de Pe\u00e7a','Termos Localizados','Empresa Faturante','Instru\u00e7\u00f5es por','Valor Servi\u00e7o (R$)','Valor Pe\u00e7as (R$)','Total (R$)','Justificativa','Link'];
+    const NCOL=headers.length;
     const rows=dados.map(d=>{const v=valoresCobranca(d);const md=cobradoDate(d.codigo);
+      const equipAssist=v.equipamento||((d.equipamento==='*'||!d.equipamento)?'':d.equipamento);
       return [d.codigo,formatDate(d.data),formatDateTime(md),d.cliente,d.cnpj?formatCnpj(d.cnpj):'',d.tecnico,d.tipo,
-        d.equipamento==='*'?'':d.equipamento,d.categoria==='*'?'':d.categoria,d.termos==='*'?'':d.termos,
+        d.equipamento==='*'?'':d.equipamento,equipAssist,d.categoria==='*'?'':d.categoria,d.termos==='*'?'':d.termos,
         v.empresa,v.responsavel,v.servico,v.pecas,v.total,v.justificativa,d.link];});
-    const totalGeral=rows.reduce((a,r)=>a+(r[14]||0),0);
-    const titulo=[['GRUPO LABMEDIC \u2014 Registros marcados para cobran\u00e7a'],
+    const totServ=rows.reduce((a,r)=>a+(r[13]||0),0),totPecas=rows.reduce((a,r)=>a+(r[14]||0),0),totalGeral=rows.reduce((a,r)=>a+(r[15]||0),0);
+    const titulo=[['GRUPO LABMEDIC \u2014 Registros Marcados para Cobran\u00e7a'],
       ['Per\u00edodo de marca\u00e7\u00e3o: '+cobPeriodoTexto()],
       ['Gerado em: '+new Date().toLocaleString('pt-BR')+'  \u2014  '+dados.length+' registro(s)  \u2014  Total: '+moedaBR(totalGeral)],
       []];
     const ws=XLSX.utils.aoa_to_sheet([...titulo,headers,...rows]);
-    ws['!cols']=[{wch:14},{wch:12},{wch:18},{wch:34},{wch:20},{wch:22},{wch:22},{wch:24},{wch:26},{wch:24},{wch:16},{wch:22},{wch:15},{wch:15},{wch:15},{wch:46},{wch:40}];
-    ws['!merges']=[{s:{r:0,c:0},e:{r:0,c:8}},{s:{r:1,c:0},e:{r:1,c:8}},{s:{r:2,c:0},e:{r:2,c:8}}];
-    const hdrRow=titulo.length;
-    ws['!autofilter']={ref:XLSX.utils.encode_range({s:{r:hdrRow,c:0},e:{r:hdrRow+rows.length,c:headers.length-1}})};
+    ws['!cols']=[{wch:15},{wch:12},{wch:18},{wch:34},{wch:20},{wch:24},{wch:24},{wch:26},{wch:26},{wch:26},{wch:26},{wch:34},{wch:24},{wch:16},{wch:16},{wch:16},{wch:50},{wch:40}];
+    ws['!merges']=[0,1,2].map(r=>({s:{r,c:0},e:{r,c:NCOL-1}}));
+    ws['!rows']=[{hpt:26},{hpt:15},{hpt:15},{hpt:6},{hpt:30}];
+    const hdrRow=titulo.length,firstData=hdrRow+1,lastData=hdrRow+rows.length,totRow=lastData+1;
+    ws['!autofilter']={ref:XLSX.utils.encode_range({s:{r:hdrRow,c:0},e:{r:lastData,c:NCOL-1}})};
     ws['!freeze']={xSplit:0,ySplit:hdrRow+1};
-    /* Formata\u00e7\u00e3o: t\u00edtulo, cabe\u00e7alho e colunas monet\u00e1rias */
+    /* Formata\u00e7\u00e3o profissional: titulo institucional, cabe\u00e7alho verde, zebra, bordas e linha de totais */
+    const VERDE_ESC='065F46',VERDE='059669',VERDE_BORDA='047857',CINZA_BORDA='D9E2EC',ZEBRA='F4F8F7',TEXTO='1F2937',TOTAL_BG='ECFDF5';
+    const borda={top:{style:'thin',color:{rgb:CINZA_BORDA}},bottom:{style:'thin',color:{rgb:CINZA_BORDA}},left:{style:'thin',color:{rgb:CINZA_BORDA}},right:{style:'thin',color:{rgb:CINZA_BORDA}}};
     const setCell=(addr,style)=>{if(ws[addr])ws[addr].s=style;};
-    setCell('A1',{font:{bold:true,sz:14,color:{rgb:'B45309'}}});
-    setCell('A2',{font:{bold:true,sz:10,color:{rgb:'475569'}}});
-    setCell('A3',{font:{sz:10,color:{rgb:'475569'}}});
-    headers.forEach((_,c)=>setCell(XLSX.utils.encode_cell({r:hdrRow,c}),{font:{bold:true,color:{rgb:'FFFFFF'}},fill:{fgColor:{rgb:'B45309'}},alignment:{horizontal:'center',wrapText:true}}));
-    rows.forEach((_,i)=>{[12,13,14].forEach(c=>{const cell=ws[XLSX.utils.encode_cell({r:hdrRow+1+i,c})];if(cell){cell.t='n';cell.z='R$ #,##0.00';}});});
+    for(let c=0;c<NCOL;c++){
+      setCell(XLSX.utils.encode_cell({r:0,c}),{font:{bold:true,sz:14,color:{rgb:'FFFFFF'}},fill:{fgColor:{rgb:VERDE_ESC}},alignment:{horizontal:'left',vertical:'center'}});
+      setCell(XLSX.utils.encode_cell({r:1,c}),{font:{italic:true,sz:10,color:{rgb:'475569'}},fill:{fgColor:{rgb:'F8FAFC'}},alignment:{horizontal:'left',vertical:'center'}});
+      setCell(XLSX.utils.encode_cell({r:2,c}),{font:{sz:9,color:{rgb:'64748B'}},fill:{fgColor:{rgb:'F8FAFC'}},alignment:{horizontal:'left',vertical:'center'}});
+    }
+    headers.forEach((_,c)=>setCell(XLSX.utils.encode_cell({r:hdrRow,c}),{font:{bold:true,sz:10,color:{rgb:'FFFFFF'}},fill:{fgColor:{rgb:VERDE}},alignment:{horizontal:'center',vertical:'center',wrapText:true},border:{top:{style:'thin',color:{rgb:VERDE_BORDA}},bottom:{style:'thin',color:{rgb:VERDE_BORDA}},left:{style:'thin',color:{rgb:VERDE_BORDA}},right:{style:'thin',color:{rgb:VERDE_BORDA}}}}));
+    const wrapCols={9:1,10:1,16:1,17:1};
+    rows.forEach((_,i)=>{const r=firstData+i,zebra=i%2===1;
+      for(let c=0;c<NCOL;c++){
+        const money=c>=13&&c<=15;
+        const cell=ws[XLSX.utils.encode_cell({r,c})];
+        if(cell){
+          if(money){cell.t='n';cell.z='"R$" #,##0.00';}
+          cell.s={font:{sz:10,color:{rgb:TEXTO}},fill:zebra?{fgColor:{rgb:ZEBRA}}:undefined,alignment:{vertical:'top',horizontal:money?'right':undefined,wrapText:!!wrapCols[c]},border:borda};
+        }
+      }});
+    /* Linha de totais gerais */
+    const totArr=new Array(NCOL).fill('');
+    totArr[12]='TOTAL GERAL';totArr[13]=totServ;totArr[14]=totPecas;totArr[15]=totalGeral;
+    XLSX.utils.sheet_add_aoa(ws,[totArr],{origin:{r:totRow,c:0}});
+    for(let c=0;c<NCOL;c++){
+      const cell=ws[XLSX.utils.encode_cell({r:totRow,c})];
+      if(cell){
+        if(c>=13&&c<=15){cell.t='n';cell.z='"R$" #,##0.00';}
+        cell.s={font:{bold:true,sz:10,color:{rgb:VERDE_ESC}},fill:{fgColor:{rgb:TOTAL_BG}},alignment:{horizontal:c===12?'right':(c>=13&&c<=15?'right':'left'),vertical:'center'},border:{top:{style:'medium',color:{rgb:VERDE}},bottom:{style:'thin',color:{rgb:VERDE_BORDA}},left:{style:'thin',color:{rgb:CINZA_BORDA}},right:{style:'thin',color:{rgb:CINZA_BORDA}}}};
+      }
+    }
     const wb=XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb,ws,'Cobran\u00e7as');
     XLSX.writeFile(wb,'cobrancas_marcadas.xlsx');
@@ -2013,7 +2100,7 @@
     function linha(d){
       const v=valoresCobranca(d);
       const cats=(d.categoria==='*'||!d.categoria)?'N\u00e3o especificado':d.categoria.split(';').map(c=>c.trim()).filter(Boolean).join(', ');
-      const equip=(d.equipamento==='*'||!d.equipamento)?'\u2014':d.equipamento;
+      const equip=(v.equipamento||((d.equipamento==='*'||!d.equipamento)?'':d.equipamento))||'\u2014';
       return `<tr>
         <td class="mono">${esc(d.codigo)}</td>
         <td class="nowrap">${formatDate(d.data)}</td>
@@ -2176,5 +2263,7 @@
     <div class="prog-pct" id="progPct">0%</div>
   </div>
 </div>
+<script type="module" src="https://static.cloudflareinsights.com/beacon.min.js/v31edd6df95cf4e85bb4c19e7a9bdbcba1788362987495" integrity="sha512-iIg7k2xntmwu6/uSb5tpc/hySgZc4eoL31yB29W6tJFo2akwjPWcEqnCEdJvGexCL0KEQwVYv5BlowfhVz26hg==" data-cf-beacon='{"version":"2024.11.0","token":"4edd5f8ec12a48cfa682ab8261b80a79","spa":2}' crossorigin="anonymous"></script>
+<script type="module" src="https://static.cloudflareinsights.com/beacon.min.js/v31edd6df95cf4e85bb4c19e7a9bdbcba1788362987495" integrity="sha512-iIg7k2xntmwu6/uSb5tpc/hySgZc4eoL31yB29W6tJFo2akwjPWcEqnCEdJvGexCL0KEQwVYv5BlowfhVz26hg==" data-cf-beacon='{"version":"2024.11.0","token":"4edd5f8ec12a48cfa682ab8261b80a79","spa":2}' crossorigin="anonymous"></script>
 </body>
 </html>
