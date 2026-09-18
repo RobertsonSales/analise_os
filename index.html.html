@@ -1761,10 +1761,10 @@
 <script>window.onload=function(){setTimeout(function(){window.print();},400);}<\/script>
 </body></html>`;
 
-    const blob=new Blob([html],{type:'text/html'});const url=URL.createObjectURL(blob);
-    const win=window.open(url,'_blank');
-    if(!win)showToast('Permita pop-ups para visualizar o PDF','error');
-    else showToast('PDF gerado — use Ctrl+P para salvar','success');
+    const win=window.open('','_blank');
+    if(!win){showToast('Permita pop-ups para visualizar o PDF','error');return;}
+    win.document.open();win.document.write(html);win.document.close();
+    showToast('PDF gerado — use Ctrl+P para salvar','success');
   }
 
   /* Exportar CSV */
@@ -1968,10 +1968,10 @@
 <script>window.onload=function(){setTimeout(function(){window.print();},500);}<\/script>
 </body></html>`;
 
-    const blob=new Blob([html],{type:'text/html'});const url=URL.createObjectURL(blob);
-    const win=window.open(url,'_blank');
-    if(!win)showToast('Permita pop-ups para visualizar o relatório em PDF','error');
-    else showToast('Relatório gerado — use Ctrl+P para salvar em PDF','success');
+    const win=window.open('','_blank');
+    if(!win){showToast('Permita pop-ups para visualizar o relatório em PDF','error');return;}
+    win.document.open();win.document.write(html);win.document.close();
+    showToast('Relatório gerado — use Ctrl+P para salvar em PDF','success');
   }
 
   /* =========================================
@@ -2511,10 +2511,10 @@
 <script>window.onload=function(){setTimeout(function(){window.print();},500);}<\/script>
 </body></html>`;
 
-    const blob=new Blob([html],{type:'text/html'});const url=URL.createObjectURL(blob);
-    const win=window.open(url,'_blank');
-    if(!win)showToast('Permita pop-ups para visualizar o PDF de cobran\u00e7as','error');
-    else showToast('PDF de cobran\u00e7as gerado \u2014 use Ctrl+P para salvar','success');
+    const win=window.open('','_blank');
+    if(!win){showToast('Permita pop-ups para visualizar o PDF de cobran\u00e7as','error');return;}
+    win.document.open();win.document.write(html);win.document.close();
+    showToast('PDF de cobran\u00e7as gerado \u2014 use Ctrl+P para salvar','success');
   }
 
   /* ---- Planilha Excel completa: registros + sub-registros (pe\u00e7as detalhadas) ---- */
@@ -2788,10 +2788,10 @@
 <script>window.onload=function(){setTimeout(function(){window.print();},500);}<\/script>
 </body></html>`;
 
-    const blob=new Blob([html],{type:'text/html'});const url=URL.createObjectURL(blob);
-    const win=window.open(url,'_blank');
-    if(!win)showToast('Permita pop-ups para visualizar a fatura em PDF','error');
-    else showToast('Fatura consolidada gerada com '+dados.length+' registro(s) \u2014 use Ctrl+P para salvar em PDF','success');
+    const win=window.open('','_blank');
+    if(!win){showToast('Permita pop-ups para visualizar a fatura em PDF','error');return;}
+    win.document.open();win.document.write(html);win.document.close();
+    showToast('Fatura consolidada gerada com '+dados.length+' registro(s) \u2014 use Ctrl+P para salvar em PDF','success');
   }
 
   function reimport(){allData=[];filteredData=[];currentPage=1;document.getElementById('dashboardScreen').classList.remove('active');document.getElementById('importScreen').classList.remove('hidden');fileInput.value='';}
