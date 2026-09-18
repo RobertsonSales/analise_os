@@ -873,7 +873,18 @@
   try{initCarousel();}catch(errCarousel){console.error('Falha ao iniciar o carrossel (não afeta a importação):',errCarousel);}
   const PAGE_SIZE=15;
   let sortCol='data',sortAsc=false,COL={},currentBillingIdx=-1;
-  const billingStore={};
+  /* Persist\u00eancia dos detalhes de cobran\u00e7a (instru\u00e7\u00f5es, pre\u00e7os e itens de pe\u00e7as detalhados por O.S.)
+     no localStorage do dispositivo \u2014 mesmo mecanismo j\u00e1 usado para as marca\u00e7\u00f5es de "j\u00e1 cobrada". */
+  const BILLING_STORE_KEY='osDetalhesCobranca';
+  let billingStoreRaw={};
+  try{billingStoreRaw=JSON.parse(localStorage.getItem(BILLING_STORE_KEY)||'{}')||{};}catch(e){billingStoreRaw={};}
+  function saveBillingStore(){try{localStorage.setItem(BILLING_STORE_KEY,JSON.stringify(billingStoreRaw));}catch(e){}}
+  /* Proxy: qualquer atribui\u00e7\u00e3o feita a billingStore[codigo] em qualquer parte do c\u00f3digo
+     j\u00e1 persiste automaticamente no localStorage, sem precisar alterar cada ponto de escrita. */
+  const billingStore=new Proxy(billingStoreRaw,{
+    set(target,prop,value){target[prop]=value;saveBillingStore();return true;},
+    deleteProperty(target,prop){delete target[prop];saveBillingStore();return true;}
+  });
   const EMPRESAS={
     'LABMEDIC':{nome:'LABMEDIC COMÉRCIO E MANUTENÇÃO DE EQUIPAMENTOS LTDA',cnpj:'21.947.632/0001-37'},
     'DIAG RIO':{nome:'DIAG RIO PRODUTOS PARA LABORATÓRIOS LTDA',cnpj:'14.878.232/0001-51'}
