@@ -321,6 +321,31 @@
   .pr-actions{display:flex;gap:.5rem;flex-wrap:wrap}
   .pr-error{color:var(--danger);font-size:.74rem;margin-top:.5rem;display:none}
   .pr-error.show{display:block}
+  .pr-extra-actions{display:flex;flex-wrap:wrap;align-items:center;gap:.5rem;margin-top:.9rem;padding-top:.75rem;border-top:1px dashed var(--border)}
+  .pr-extra-label{font-size:.72rem;color:var(--muted);font-weight:600;margin-right:.2rem;white-space:nowrap}
+  .btn-icon-pecas{position:relative;width:30px;height:26px;border-radius:.4rem;border:1px solid var(--border);background:var(--bg-el);color:var(--accent-l);display:inline-flex;align-items:center;justify-content:center;cursor:pointer;transition:all .2s;font-size:.72rem}
+  .btn-icon-pecas:hover{border-color:var(--accent);background:var(--accent-glow)}
+  .btn-icon-pecas .pd-badge{position:absolute;top:-6px;right:-6px;background:var(--accent);color:#fff;font-size:.56rem;font-weight:700;min-width:15px;height:15px;border-radius:999px;display:flex;align-items:center;justify-content:center;padding:0 3px;font-family:'Space Mono',monospace;line-height:1}
+  .pr-pecas-locked{opacity:.85;cursor:not-allowed;border-color:var(--accent)!important;background:var(--accent-glow)!important}
+  .pecas-detail-modal{z-index:110}
+  .pecas-detail-modal .modal-content{max-width:660px;border-color:var(--accent)}
+  .pecas-detail-modal .modal-header{border-bottom-color:rgba(16,185,129,.3)}
+  .pecas-detail-modal .modal-header h2{color:var(--accent-l);font-size:1.02rem}
+  .pd-hint{background:var(--accent-glow);border:1px solid rgba(16,185,129,.25);border-radius:.5rem;padding:.6rem .7rem;margin-bottom:.85rem;font-size:.74rem;color:var(--accent-l);display:flex;gap:.45rem;align-items:flex-start}
+  #pdInfo{margin-bottom:.85rem}
+  .pd-table-wrap{max-height:38vh;overflow:auto;border:1px solid var(--border);border-radius:.6rem;margin-bottom:.7rem}
+  table.pd-table{width:100%;border-collapse:collapse;font-size:.75rem}
+  table.pd-table th{position:sticky;top:0;z-index:1;background:var(--bg-el);color:var(--muted);text-transform:uppercase;letter-spacing:.05em;font-size:.62rem;font-weight:700;padding:.5rem .55rem;text-align:left;border-bottom:1px solid var(--border);white-space:nowrap}
+  table.pd-table td{padding:.4rem .5rem;border-bottom:1px solid var(--border);vertical-align:middle}
+  table.pd-table tr:last-child td{border-bottom:none}
+  .pd-input{width:100%;padding:.4rem .5rem;border-radius:.4rem;border:1px solid var(--border);background:var(--bg-el);color:var(--text);font-size:.75rem;font-family:inherit;outline:none;transition:border-color .2s}
+  .pd-input:focus{border-color:var(--accent)}
+  input.pd-qtd{text-align:center}
+  .pd-remove-btn{width:26px;height:26px;border-radius:.4rem;border:1px solid var(--border);background:transparent;color:var(--danger);cursor:pointer;display:inline-flex;align-items:center;justify-content:center;transition:all .2s;font-size:.7rem}
+  .pd-remove-btn:hover{background:rgba(239,68,68,.12);border-color:var(--danger)}
+  .pd-total-box{display:flex;justify-content:flex-end;align-items:center;gap:.4rem;font-size:.82rem;color:var(--muted);margin-bottom:1rem;padding-top:.6rem;border-top:1px dashed var(--border)}
+  .pd-total-box strong{color:var(--accent-l);font-size:1.05rem}
+  .pd-actions{display:flex;justify-content:flex-end;gap:.5rem}
   .currency-wrap{position:relative}.currency-wrap span{position:absolute;left:.75rem;top:50%;transform:translateY(-50%);color:var(--muted);font-size:.82rem;font-weight:600}.currency-wrap input{padding-left:1.6rem!important}
   .billing-actions{display:flex;gap:.65rem;margin-top:1rem;flex-wrap:wrap}
 
@@ -688,7 +713,7 @@
     </div>
     <div class="modal-body">
       <div class="pr-hint"><i class="fas fa-info-circle" style="margin-top:.1rem;flex-shrink:0;"></i>
-        <span>Informe o valor das peças e o valor do serviço de cada registro. <strong>Todos os campos são obrigatórios</strong> — o documento só é gerado após o preenchimento completo.</span></div>
+        <span>Informe o valor das peças de cada registro (<strong>obrigatório</strong>). O valor do serviço é opcional — deixe em branco caso não haja cobrança de serviço.</span></div>
       <div class="pr-tools">
         <div><label>Aplicar peças (R$) a todos</label><div class="currency-wrap"><span>R$</span><input type="text" inputmode="decimal" class="pr-input" id="prBulkPecas" placeholder="0,00" style="width:130px;" oninput="maskMoeda(this)" onblur="maskMoeda(this)"></div></div>
         <div><label>Aplicar serviço (R$) a todos</label><div class="currency-wrap"><span>R$</span><input type="text" inputmode="decimal" class="pr-input" id="prBulkServico" placeholder="0,00" style="width:130px;" oninput="maskMoeda(this)" onblur="maskMoeda(this)"></div></div>
@@ -700,18 +725,53 @@
           <thead><tr>
             <th style="width:110px;">Código</th><th style="width:90px;">Data</th><th>Unidade (Cliente)</th>
             <th>Equipamento</th><th>Categoria(s) de Peça</th>
+            <th style="width:56px;text-align:center;">Peças</th>
             <th style="width:130px;">Valor Peças (R$)</th><th style="width:130px;">Valor Serviço (R$)</th><th style="width:110px;text-align:right;">Total</th>
           </tr></thead>
           <tbody id="pricesBody"></tbody>
         </table>
       </div>
       <div class="pr-error" id="pricesError"><i class="fas fa-exclamation-triangle"></i> <span id="pricesErrorText"></span></div>
+      <div class="pr-extra-actions">
+        <span class="pr-extra-label"><i class="fas fa-layer-group"></i> Documentos completos (com detalhamento de peças):</span>
+        <button class="btn btn-sm" onclick="exportarExcelCobrancasDetalhado()" title="Planilha com todos os registros e os sub-registros (peças) de cada cobrança"><i class="fas fa-file-excel"></i> Planilha Detalhada</button>
+        <button class="btn btn-gold btn-sm" onclick="gerarFaturasProfissionaisPDF()" title="Fatura profissional para cada registro, no mesmo modelo da fatura de Instruções de Cobrança"><i class="fas fa-file-invoice"></i> PDF Fatura Profissional</button>
+      </div>
       <div class="pr-foot">
         <div class="pr-total-box">Total geral:<strong id="pricesTotal">R$ 0,00</strong></div>
         <div class="pr-actions">
           <button class="btn" onclick="closePricesModal()"><i class="fas fa-times"></i> Cancelar</button>
           <button class="btn btn-gold" id="pricesConfirmBtn" onclick="confirmarPrecosCobranca()"><i class="fas fa-check"></i> Gerar documento</button>
         </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal de Detalhamento de Peças (sub-registros de um registro do modal de Precificação) -->
+<div class="modal-overlay pecas-detail-modal" id="pecasDetailModal">
+  <div class="modal-content">
+    <div class="modal-header">
+      <h2><i class="fas fa-boxes-stacked" style="margin-right:.4rem;"></i> Detalhamento de Peças — <span id="pdCodigo" style="font-family:'Space Mono',monospace;"></span></h2>
+      <button class="modal-close" onclick="closeDetalhePecas()" aria-label="Fechar"><i class="fas fa-times"></i></button>
+    </div>
+    <div class="modal-body">
+      <div class="pd-hint"><i class="fas fa-info-circle" style="margin-top:.1rem;flex-shrink:0;"></i>
+        <span>Adicione quantas peças forem necessárias, com a descrição e o valor de cada uma. O campo <strong>Valor Peças (R$)</strong> do registro é atualizado automaticamente com a soma destes itens.</span></div>
+      <div id="pdInfo"></div>
+      <div class="pd-table-wrap">
+        <table class="pd-table">
+          <thead><tr>
+            <th>Descrição da Peça</th><th style="width:64px;text-align:center;">Qtd.</th>
+            <th style="width:120px;">Valor Unit. (R$)</th><th style="width:110px;text-align:right;">Subtotal</th><th style="width:40px;"></th>
+          </tr></thead>
+          <tbody id="pdItemsBody"></tbody>
+        </table>
+      </div>
+      <button class="btn btn-sm pd-add-btn" onclick="adicionarItemPeca()"><i class="fas fa-plus"></i> Adicionar peça</button>
+      <div class="pd-total-box">Total de peças:<strong id="pdTotal">R$ 0,00</strong></div>
+      <div class="pd-actions">
+        <button class="btn btn-gold" onclick="closeDetalhePecas()"><i class="fas fa-check"></i> Concluído</button>
       </div>
     </div>
   </div>
@@ -1952,13 +2012,22 @@
       const b=billingStore[d.codigo]||{};
       const equip=(b.equipamento||((d.equipamento==='*'||!d.equipamento)?'':d.equipamento))||'\u2014';
       const cats=(d.categoria==='*'||!d.categoria)?'N\u00e3o especificado':d.categoria.split(';').map(c=>c.trim()).filter(Boolean).join(', ');
+      const itensSalvos=(b.pecasItens&&b.pecasItens.length)?b.pecasItens:[];
+      const temItens=itensSalvos.length>0;
+      const somaItens=itensSalvos.reduce((a,it)=>a+((parseMoedaBR(it.valor)||0)*(parseInt(it.qtd,10)||1)),0);
+      const valorPecasVal=temItens?fmtMoedaBR(somaItens):(!isNaN(parseMoedaBR(b.valorPecas))?fmtMoedaBR(parseMoedaBR(b.valorPecas)):'');
       return `<tr data-i="${i}">
         <td class="mono">${esc(d.codigo)}</td>
         <td style="white-space:nowrap;">${formatDate(d.data)}</td>
         <td title="${esc(d.cliente)}">${esc(d.cliente)}</td>
         <td title="${esc(equip)}">${esc(equip)}</td>
         <td>${esc(cats)}</td>
-        <td><div class="currency-wrap"><span>R$</span><input type="text" inputmode="decimal" class="pr-input pr-pecas" placeholder="0,00" value="${!isNaN(parseMoedaBR(b.valorPecas))?fmtMoedaBR(parseMoedaBR(b.valorPecas)):''}" oninput="maskMoeda(this)" onblur="blurMoeda(this)"></div></td>
+        <td style="text-align:center;">
+          <button class="btn-icon-pecas" id="pdIcon-${i}" onclick="abrirDetalhePecas(${i})" title="Detalhar o pre\u00e7o das pe\u00e7as desta O.S.">
+            <i class="fas fa-list-ul"></i><span class="pd-badge" id="pdBadge-${i}" style="${temItens?'':'display:none;'}">${itensSalvos.length}</span>
+          </button>
+        </td>
+        <td><div class="currency-wrap"><span>R$</span><input type="text" inputmode="decimal" class="pr-input pr-pecas${temItens?' pr-pecas-locked':''}" ${temItens?'readonly title="Valor calculado automaticamente pelo detalhamento de pe\u00e7as"':''} placeholder="0,00" value="${valorPecasVal}" oninput="maskMoeda(this)" onblur="blurMoeda(this)"></div></td>
         <td><div class="currency-wrap"><span>R$</span><input type="text" inputmode="decimal" class="pr-input pr-servico" placeholder="0,00" value="${!isNaN(parseMoedaBR(b.valorServico))?fmtMoedaBR(parseMoedaBR(b.valorServico)):''}" oninput="maskMoeda(this)" onblur="blurMoeda(this)"></div></td>
         <td class="pr-row-total" style="text-align:right;">\u2014</td>
       </tr>`;}).join('');
@@ -1966,7 +2035,7 @@
     atualizarTotaisPrecos();
     document.getElementById('pricesModal').classList.add('active');
     document.body.style.overflow='hidden';
-    setTimeout(()=>{const f=document.querySelector('#pricesBody .pr-pecas');if(f)f.focus();},120);
+    setTimeout(()=>{const f=[...document.querySelectorAll('#pricesBody .pr-pecas')].find(el=>!el.readOnly);if(f)f.focus();},120);
   }
 
   function closePricesModal(){
@@ -1982,10 +2051,11 @@
     let total=0;
     document.querySelectorAll('#pricesBody tr').forEach(tr=>{
       const p=tr.querySelector('.pr-pecas'),s=tr.querySelector('.pr-servico');
-      const vp=p.value.trim()===''?null:parseMoedaBR(p.value),vs=s.value.trim()===''?null:parseMoedaBR(s.value);
+      const pVazio=p.value.trim()==='',sVazio=s.value.trim()==='';
+      const vpRaw=pVazio?0:parseMoedaBR(p.value),vsRaw=sVazio?0:parseMoedaBR(s.value);
       const cell=tr.querySelector('.pr-row-total');
-      if(vp===null||vs===null||isNaN(vp)||isNaN(vs)){cell.textContent='\u2014';cell.style.color='var(--muted)';}
-      else{const t=vp+vs;total+=t;cell.textContent=moedaBR(t);cell.style.color='var(--accent-l)';}
+      if((pVazio&&sVazio)||isNaN(vpRaw)||isNaN(vsRaw)){cell.textContent='\u2014';cell.style.color='var(--muted)';}
+      else{const t=vpRaw+vsRaw;total+=t;cell.textContent=moedaBR(t);cell.style.color='var(--accent-l)';}
       [p,s].forEach(inp=>{if(inp.value!=='')inp.classList.remove('invalid');});
     });
     document.getElementById('pricesTotal').textContent=moedaBR(total);
@@ -1994,44 +2064,198 @@
   function aplicarPrecosEmLote(){
     const bp=document.getElementById('prBulkPecas').value,bs=document.getElementById('prBulkServico').value;
     if(bp.trim()===''&&bs.trim()===''){showToast('Informe ao menos um valor para aplicar','error');return;}
+    let ignorados=0;
     document.querySelectorAll('#pricesBody tr').forEach(tr=>{
-      if(bp.trim()!=='')tr.querySelector('.pr-pecas').value=fmtMoedaBR(parseMoedaBR(bp));
+      const pecasInp=tr.querySelector('.pr-pecas');
+      if(bp.trim()!==''){if(pecasInp.readOnly)ignorados++;else pecasInp.value=fmtMoedaBR(parseMoedaBR(bp));}
       if(bs.trim()!=='')tr.querySelector('.pr-servico').value=fmtMoedaBR(parseMoedaBR(bs));
     });
     atualizarTotaisPrecos();esconderErroPrecos();
-    showToast('Valores aplicados a todos os registros','success');
+    showToast('Valores aplicados a todos os registros'+(ignorados?' (' +ignorados+' com pe\u00e7as detalhadas foram mantidos)':''),'success');
   }
 
   function zerarPrecos(){
-    document.querySelectorAll('#pricesBody .pr-input').forEach(i=>{i.value='';i.classList.remove('invalid');});
+    document.querySelectorAll('#pricesBody .pr-input').forEach(i=>{if(i.readOnly)return;i.value='';i.classList.remove('invalid');});
     atualizarTotaisPrecos();
   }
 
-  function confirmarPrecosCobranca(){
+  /* Valida todos os campos de pre\u00e7o do modal e persiste os valores no billingStore.
+     Reaproveitada por todos os bot\u00f5es de gera\u00e7\u00e3o de documento do modal de Precifica\u00e7\u00e3o. */
+  function validarEPersistirPrecos(){
     const rows=[...document.querySelectorAll('#pricesBody tr')];
     let firstInvalid=null,invalidos=0;
     rows.forEach(tr=>{
-      [tr.querySelector('.pr-pecas'),tr.querySelector('.pr-servico')].forEach(inp=>{
-        const v=inp.value.trim(),n=parseMoedaBR(v);
-        if(v===''||isNaN(n)||n<0){inp.classList.add('invalid');invalidos++;if(!firstInvalid)firstInvalid=inp;}
-        else inp.classList.remove('invalid');
-      });
+      const pecas=tr.querySelector('.pr-pecas'),servico=tr.querySelector('.pr-servico');
+      /* Valor de Pe\u00e7as: obrigat\u00f3rio */
+      const vp=pecas.value.trim(),np=parseMoedaBR(vp);
+      if(vp===''||isNaN(np)||np<0){pecas.classList.add('invalid');invalidos++;if(!firstInvalid)firstInvalid=pecas;}
+      else pecas.classList.remove('invalid');
+      /* Valor de Servi\u00e7o: opcional \u2014 em branco \u00e9 tratado como R$ 0,00 */
+      const vs=servico.value.trim();
+      if(vs===''){servico.classList.remove('invalid');}
+      else{const ns=parseMoedaBR(vs);if(isNaN(ns)||ns<0){servico.classList.add('invalid');invalidos++;if(!firstInvalid)firstInvalid=servico;}else servico.classList.remove('invalid');}
     });
     if(invalidos){
-      mostrarErroPrecos('Preencha o valor de pe\u00e7as e de servi\u00e7o de todos os registros ('+invalidos+' campo(s) pendente(s)). O documento n\u00e3o ser\u00e1 gerado enquanto houver campos vazios.');
+      mostrarErroPrecos('Preencha o valor de pe\u00e7as de todos os registros ('+invalidos+' campo(s) pendente(s) ou inv\u00e1lido(s)). O valor do servi\u00e7o \u00e9 opcional. O documento n\u00e3o ser\u00e1 gerado enquanto houver campos pendentes.');
       if(firstInvalid){firstInvalid.focus();firstInvalid.scrollIntoView({block:'center',behavior:'smooth'});}
-      showToast('Informe os pre\u00e7os de todos os itens antes de gerar o documento','error');
-      return;
+      showToast('Informe o valor das pe\u00e7as de todos os itens antes de gerar o documento','error');
+      return false;
     }
     rows.forEach(tr=>{
       const d=pricesData[parseInt(tr.dataset.i,10)];if(!d)return;
       const prev=billingStore[d.codigo]||{};
-      billingStore[d.codigo]={...prev,valorPecas:String(parseMoedaBR(tr.querySelector('.pr-pecas').value)),valorServico:String(parseMoedaBR(tr.querySelector('.pr-servico').value)),empresa:prev.empresa||'LABMEDIC',nome:prev.nome||BILLING_DEFAULT_NOME,justificativa:prev.justificativa||BILLING_DEFAULT_JUSTIFICATIVA};
+      const servicoVal=tr.querySelector('.pr-servico').value.trim();
+      billingStore[d.codigo]={...prev,valorPecas:String(parseMoedaBR(tr.querySelector('.pr-pecas').value)),valorServico:String(servicoVal===''?0:parseMoedaBR(servicoVal)),empresa:prev.empresa||'LABMEDIC',nome:prev.nome||BILLING_DEFAULT_NOME,justificativa:prev.justificativa||BILLING_DEFAULT_JUSTIFICATIVA};
     });
-    const action=pricesAction;
     esconderErroPrecos();
+    return true;
+  }
+
+  function confirmarPrecosCobranca(){
+    if(!validarEPersistirPrecos())return;
+    const action=pricesAction;
     closePricesModal();
     if(action==='pdf')gerarPDFCobrancasDoc();else exportarExcelCobrancasDoc();
+  }
+
+  /* Bot\u00f5es extras do modal de Precifica\u00e7\u00e3o: documentos completos, incluindo os sub-registros de pe\u00e7as */
+  function exportarExcelCobrancasDetalhado(){
+    if(!validarEPersistirPrecos())return;
+    closePricesModal();
+    exportarExcelCobrancasDetalhadoDoc();
+  }
+  function gerarFaturasProfissionaisPDF(){
+    if(!validarEPersistirPrecos())return;
+    closePricesModal();
+    gerarFaturasProfissionaisDoc();
+  }
+
+  /* =========================================
+     Detalhamento de Pe\u00e7as (sub-registros) de um registro do modal de Precifica\u00e7\u00e3o
+  ========================================= */
+  let pecasDetailIdx=-1,pdItensAtuais=[];
+
+  function pdRowSubtotal(idx){
+    const it=pdItensAtuais[idx];if(!it)return 0;
+    const q=parseInt(it.qtd,10)||1,v=parseMoedaBR(it.valor);
+    return (isNaN(v)?0:v)*q;
+  }
+
+  function abrirDetalhePecas(i){
+    const d=pricesData[i];if(!d)return;
+    pecasDetailIdx=i;
+    document.getElementById('pdCodigo').textContent=d.codigo;
+    document.getElementById('pdInfo').innerHTML=`
+      <div style="background:var(--bg-el);border:1px solid var(--border);border-radius:.5rem;padding:.55rem .75rem;font-size:.75rem;display:flex;flex-wrap:wrap;gap:.3rem 1.2rem;">
+        <div><span style="color:var(--muted);">Unidade:</span> <strong>${esc(d.cliente)}</strong></div>
+        <div><span style="color:var(--muted);">Data:</span> <strong>${formatDate(d.data)}</strong></div>
+      </div>`;
+    const b=billingStore[d.codigo]||{};
+    if(b.pecasItens&&b.pecasItens.length){
+      pdItensAtuais=b.pecasItens.map(it=>({desc:it.desc||'',qtd:it.qtd||1,valor:it.valor||''}));
+    }else{
+      const tr=document.querySelector('#pricesBody tr[data-i="'+i+'"]');
+      const valorManual=tr?parseMoedaBR(tr.querySelector('.pr-pecas').value):NaN;
+      if(!isNaN(valorManual)&&valorManual>0){
+        const termosArr=(d.termos&&d.termos!=='*')?d.termos.split(';').map(t=>t.trim()).filter(Boolean):[];
+        const descSugerida=termosArr.length?termosArr.join(', '):((d.categoria&&d.categoria!=='*')?d.categoria:'Pe\u00e7as substitu\u00eddas');
+        pdItensAtuais=[{desc:descSugerida,qtd:1,valor:String(valorManual)}];
+      }else{
+        pdItensAtuais=[{desc:'',qtd:1,valor:''}];
+      }
+    }
+    renderPdItems();
+    document.getElementById('pecasDetailModal').classList.add('active');
+    setTimeout(()=>{const f=document.querySelector('#pdItemsBody .pd-desc');if(f)f.focus();},120);
+  }
+
+  function closeDetalhePecas(){
+    document.getElementById('pecasDetailModal').classList.remove('active');
+    pecasDetailIdx=-1;pdItensAtuais=[];
+    atualizarTotaisPrecos();
+  }
+
+  function renderPdItems(){
+    const tbody=document.getElementById('pdItemsBody');
+    if(!pdItensAtuais.length){
+      tbody.innerHTML='<tr><td colspan="5" style="text-align:center;color:var(--muted);font-size:.75rem;padding:1rem;">Nenhuma pe\u00e7a adicionada \u2014 clique em "Adicionar pe\u00e7a".</td></tr>';
+    }else{
+      tbody.innerHTML=pdItensAtuais.map((it,idx)=>`<tr>
+        <td><input type="text" class="pd-input pd-desc" placeholder="Ex.: Sensor de temperatura" value="${esc(it.desc||'')}" oninput="pdDescChange(${idx},this)"></td>
+        <td><input type="number" min="1" step="1" class="pd-input pd-qtd" value="${it.qtd||1}" oninput="pdQtdChange(${idx},this)"></td>
+        <td><div class="currency-wrap"><span>R$</span><input type="text" inputmode="decimal" class="pd-input pd-valor" placeholder="0,00" value="${it.valor!==''&&!isNaN(parseMoedaBR(it.valor))?fmtMoedaBR(parseMoedaBR(it.valor)):''}" oninput="maskMoeda(this);pdValorChange(${idx},this)" onblur="blurMoeda(this)"></div></td>
+        <td class="pd-subtotal" id="pdSub-${idx}" style="text-align:right;">${moedaBR(pdRowSubtotal(idx))}</td>
+        <td style="text-align:center;"><button class="pd-remove-btn" onclick="removerItemPeca(${idx})" title="Remover pe\u00e7a"><i class="fas fa-trash"></i></button></td>
+      </tr>`).join('');
+    }
+    pdAtualizarTotal();
+  }
+
+  function pdDescChange(idx,el){if(pdItensAtuais[idx]){pdItensAtuais[idx].desc=el.value;pdSyncParaLinhaPrincipal();}}
+  function pdQtdChange(idx,el){
+    if(!pdItensAtuais[idx])return;
+    const q=parseInt(el.value,10);pdItensAtuais[idx].qtd=(isNaN(q)||q<1)?1:q;el.value=pdItensAtuais[idx].qtd;
+    pdAtualizarLinha(idx);pdSyncParaLinhaPrincipal();
+  }
+  function pdValorChange(idx,el){
+    if(!pdItensAtuais[idx])return;
+    pdItensAtuais[idx].valor=el.value;
+    pdAtualizarLinha(idx);pdSyncParaLinhaPrincipal();
+  }
+
+  function pdAtualizarLinha(idx){
+    const cell=document.getElementById('pdSub-'+idx);
+    if(cell)cell.textContent=moedaBR(pdRowSubtotal(idx));
+    pdAtualizarTotal();
+  }
+  function pdAtualizarTotal(){
+    let total=0;
+    pdItensAtuais.forEach((it,idx)=>{total+=pdRowSubtotal(idx);});
+    const el=document.getElementById('pdTotal');if(el)el.textContent=moedaBR(total);
+    return total;
+  }
+
+  function adicionarItemPeca(){
+    pdItensAtuais.push({desc:'',qtd:1,valor:''});
+    renderPdItems();
+    setTimeout(()=>{const inputs=document.querySelectorAll('#pdItemsBody .pd-desc');const f=inputs[inputs.length-1];if(f)f.focus();},50);
+  }
+  function removerItemPeca(idx){
+    pdItensAtuais.splice(idx,1);
+    renderPdItems();
+    pdSyncParaLinhaPrincipal();
+  }
+
+  /* Sincroniza o total dos itens de pe\u00e7as com o campo "Valor Pe\u00e7as (R$)" do registro,
+     no modal de Precifica\u00e7\u00e3o, e persiste os itens no billingStore em tempo real. */
+  function pdSyncParaLinhaPrincipal(){
+    if(pecasDetailIdx<0)return;
+    const d=pricesData[pecasDetailIdx];if(!d)return;
+    const itensValidos=pdItensAtuais.filter(it=>(it.desc&&it.desc.trim())||(it.valor!==''&&!isNaN(parseMoedaBR(it.valor))));
+    const tr=document.querySelector('#pricesBody tr[data-i="'+pecasDetailIdx+'"]');
+    if(tr){
+      const inp=tr.querySelector('.pr-pecas');
+      if(itensValidos.length){
+        const total=itensValidos.reduce((a,it)=>{const q=parseInt(it.qtd,10)||1,v=parseMoedaBR(it.valor);return a+(isNaN(v)?0:v)*q;},0);
+        inp.value=fmtMoedaBR(total);
+        inp.readOnly=true;inp.classList.add('pr-pecas-locked');
+        inp.title='Valor calculado automaticamente pelo detalhamento de pe\u00e7as';
+        inp.classList.remove('invalid');
+      }else{
+        inp.value='';inp.readOnly=false;inp.classList.remove('pr-pecas-locked');inp.title='';
+      }
+      atualizarTotaisPrecos();
+    }
+    const prev=billingStore[d.codigo]||{};
+    billingStore[d.codigo]={...prev,pecasItens:itensValidos.map(it=>({desc:(it.desc||'').trim(),qtd:parseInt(it.qtd,10)||1,valor:String(parseMoedaBR(it.valor)||0)}))};
+    atualizarIconePecas(pecasDetailIdx,itensValidos.length);
+  }
+
+  function atualizarIconePecas(idx,count){
+    const badge=document.getElementById('pdBadge-'+idx);
+    if(!badge)return;
+    badge.textContent=count;
+    badge.style.display=count?'':'none';
   }
 
   /* ---- Planilha Excel dos registros marcados para cobran\u00e7a ---- */
@@ -2130,12 +2354,31 @@
         <td class="val">${v.total?moedaBR(v.total):'\u2014'}</td>
       </tr>`;
     }
+    /* Linha de detalhamento da cobran\u00e7a: servi\u00e7o + itens de pe\u00e7as (sub-registros) de cada O.S. */
+    function linhaDetalhe(d){
+      const b=billingStore[d.codigo]||{};
+      const v=valoresCobranca(d);
+      const itens=(b.pecasItens&&b.pecasItens.length)?b.pecasItens:null;
+      const cats=(d.categoria==='*'||!d.categoria)?'N\u00e3o especificado':d.categoria.split(';').map(c=>c.trim()).filter(Boolean).join(', ');
+      const partes=[];
+      if(v.servico>0)partes.push('<span class="det-tag det-serv">Servi\u00e7o \u2014 '+esc(d.tipo)+': '+moedaBR(v.servico)+'</span>');
+      if(itens){
+        itens.forEach(it=>{
+          const qtd=parseInt(it.qtd,10)||1,unit=parseMoedaBR(it.valor)||0,sub=qtd*unit;
+          partes.push('<span class="det-tag det-peca">'+esc(it.desc||'Pe\u00e7a')+(qtd>1?' (x'+qtd+')':'')+': '+moedaBR(sub)+'</span>');
+        });
+      }else if(v.pecas>0){
+        partes.push('<span class="det-tag det-peca">Pe\u00e7as substitu\u00eddas \u2014 '+esc(cats)+': '+moedaBR(v.pecas)+'</span>');
+      }
+      if(!partes.length)return '';
+      return `<tr class="det-row"><td></td><td colspan="${NUM_COLS-1}"><div class="det-wrap">${partes.join('')}</div></td></tr>`;
+    }
     function bloco([nome,itens]){
       const sub=itens.reduce((a,d)=>a+valoresCobranca(d).total,0);
       return `<tr class="grp"><td colspan="${NUM_COLS}">
           <div class="grp-bar"><span class="grp-name">${esc(nome)}</span>
           <span class="grp-meta">${itens.length} O.S.${sub?' &bull; '+moedaBR(sub):''}</span></div>
-        </td></tr>`+itens.map(linha).join('');
+        </td></tr>`+itens.map(d=>linha(d)+linhaDetalhe(d)).join('');
     }
 
     const html=`<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><title>Relat\u00f3rio de Cobran\u00e7as \u2014 Grupo Labmedic</title>
@@ -2173,6 +2416,11 @@
   .grp-bar{display:flex;justify-content:space-between;align-items:center;gap:8px;margin:8px 0 3px;padding:4px 8px;background:#f1f5f9;border-left:3px solid #b45309;border-radius:0 4px 4px 0;}
   .grp-name{font-size:8pt;font-weight:700;color:#0f172a;}
   .grp-meta{font-size:7pt;color:#64748b;font-weight:600;white-space:nowrap;}
+  tr.det-row td{padding:2px 7px 7px;border-bottom:1px solid #f1f5f9;background:#fafbfc !important;}
+  .det-wrap{display:flex;flex-wrap:wrap;gap:4px;}
+  .det-tag{display:inline-block;font-size:6.5pt;line-height:1.5;padding:2px 7px;border-radius:9px;border:1px solid #e2e8f0;background:#fff;color:#475569;white-space:nowrap;}
+  .det-tag.det-serv{background:#eff6ff;border-color:#bfdbfe;color:#1e40af;}
+  .det-tag.det-peca{background:#fff7ed;border-color:#fed7aa;color:#9a3412;}
   .totais{margin-top:10px;display:flex;justify-content:flex-end;}
   .totais table{border-collapse:collapse;min-width:240px;}
   .totais td{padding:4px 10px;font-size:8pt;border-bottom:1px solid #e2e8f0;}
@@ -2259,6 +2507,283 @@
     else showToast('PDF de cobran\u00e7as gerado \u2014 use Ctrl+P para salvar','success');
   }
 
+  /* ---- Planilha Excel completa: registros + sub-registros (pe\u00e7as detalhadas) ---- */
+  function exportarExcelCobrancasDetalhadoDoc(){
+    const dados=registrosCobranca();
+    if(!dados.length){showToast('Nenhum registro marcado para cobran\u00e7a neste recorte','error');return;}
+    const VERDE_ESC='065F46',VERDE='059669',VERDE_BORDA='047857',CINZA_BORDA='D9E2EC',ZEBRA='F4F8F7',TEXTO='1F2937',TOTAL_BG='ECFDF5';
+    const borda={top:{style:'thin',color:{rgb:CINZA_BORDA}},bottom:{style:'thin',color:{rgb:CINZA_BORDA}},left:{style:'thin',color:{rgb:CINZA_BORDA}},right:{style:'thin',color:{rgb:CINZA_BORDA}}};
+
+    /* Sheet 1 \u2014 Resumo (um registro por O.S., com a quantidade de pe\u00e7as detalhadas) */
+    const headers=['C\u00f3digo da Tarefa','Data da O.S.','Marcado em','Unidade de Sa\u00fade','CNPJ','T\u00e9cnico Respons\u00e1vel','Tipo da Tarefa','Equipamento','Equipamento Assistido','Categoria(s) de Pe\u00e7a','Termos Localizados','Empresa Faturante','Instru\u00e7\u00f5es por','Qtde. Pe\u00e7as Detalhadas','Valor Servi\u00e7o (R$)','Valor Pe\u00e7as (R$)','Total (R$)','Justificativa','Link'];
+    const NCOL=headers.length;
+    const rows=dados.map(d=>{const v=valoresCobranca(d);const md=cobradoDate(d.codigo);
+      const equipAssist=v.equipamento||((d.equipamento==='*'||!d.equipamento)?'':d.equipamento);
+      const itens=(billingStore[d.codigo]&&billingStore[d.codigo].pecasItens)||[];
+      return [d.codigo,formatDate(d.data),formatDateTime(md),d.cliente,d.cnpj?formatCnpj(d.cnpj):'',d.tecnico,d.tipo,
+        d.equipamento==='*'?'':d.equipamento,equipAssist,d.categoria==='*'?'':d.categoria,d.termos==='*'?'':d.termos,
+        v.empresa,v.responsavel,itens.length,v.servico,v.pecas,v.total,v.justificativa,d.link];});
+    const totServ=rows.reduce((a,r)=>a+(r[14]||0),0),totPecas=rows.reduce((a,r)=>a+(r[15]||0),0),totalGeral=rows.reduce((a,r)=>a+(r[16]||0),0);
+    const titulo=[['GRUPO LABMEDIC \u2014 Cobran\u00e7as \u2014 Planilha Detalhada (registros e sub-registros de pe\u00e7as)'],
+      ['Per\u00edodo de marca\u00e7\u00e3o: '+cobPeriodoTexto()],
+      ['Gerado em: '+new Date().toLocaleString('pt-BR')+'  \u2014  '+dados.length+' registro(s)  \u2014  Total: '+moedaBR(totalGeral)],
+      []];
+    const ws=XLSX.utils.aoa_to_sheet([...titulo,headers,...rows]);
+    ws['!cols']=[{wch:15},{wch:12},{wch:18},{wch:34},{wch:20},{wch:24},{wch:24},{wch:26},{wch:26},{wch:26},{wch:26},{wch:34},{wch:24},{wch:16},{wch:16},{wch:16},{wch:16},{wch:50},{wch:40}];
+    ws['!merges']=[0,1,2].map(r=>({s:{r,c:0},e:{r,c:NCOL-1}}));
+    ws['!rows']=[{hpt:26},{hpt:15},{hpt:15},{hpt:6},{hpt:30}];
+    const hdrRow=titulo.length,firstData=hdrRow+1,lastData=hdrRow+rows.length,totRow=lastData+1;
+    ws['!autofilter']={ref:XLSX.utils.encode_range({s:{r:hdrRow,c:0},e:{r:lastData,c:NCOL-1}})};
+    ws['!freeze']={xSplit:0,ySplit:hdrRow+1};
+    const setCell=(addr,style)=>{if(ws[addr])ws[addr].s=style;};
+    for(let c=0;c<NCOL;c++){
+      setCell(XLSX.utils.encode_cell({r:0,c}),{font:{bold:true,sz:14,color:{rgb:'FFFFFF'}},fill:{fgColor:{rgb:VERDE_ESC}},alignment:{horizontal:'left',vertical:'center'}});
+      setCell(XLSX.utils.encode_cell({r:1,c}),{font:{italic:true,sz:10,color:{rgb:'475569'}},fill:{fgColor:{rgb:'F8FAFC'}},alignment:{horizontal:'left',vertical:'center'}});
+      setCell(XLSX.utils.encode_cell({r:2,c}),{font:{sz:9,color:{rgb:'64748B'}},fill:{fgColor:{rgb:'F8FAFC'}},alignment:{horizontal:'left',vertical:'center'}});
+    }
+    headers.forEach((_,c)=>setCell(XLSX.utils.encode_cell({r:hdrRow,c}),{font:{bold:true,sz:10,color:{rgb:'FFFFFF'}},fill:{fgColor:{rgb:VERDE}},alignment:{horizontal:'center',vertical:'center',wrapText:true},border:{top:{style:'thin',color:{rgb:VERDE_BORDA}},bottom:{style:'thin',color:{rgb:VERDE_BORDA}},left:{style:'thin',color:{rgb:VERDE_BORDA}},right:{style:'thin',color:{rgb:VERDE_BORDA}}}}));
+    const wrapCols={9:1,10:1,17:1,18:1};
+    rows.forEach((_,i)=>{const r=firstData+i,zebra=i%2===1;
+      for(let c=0;c<NCOL;c++){
+        const money=c>=14&&c<=16;
+        const cell=ws[XLSX.utils.encode_cell({r,c})];
+        if(cell){
+          if(money){cell.t='n';cell.z='"R$" #,##0.00';}
+          cell.s={font:{sz:10,color:{rgb:TEXTO}},fill:zebra?{fgColor:{rgb:ZEBRA}}:undefined,alignment:{vertical:'top',horizontal:money?'right':(c===13?'center':undefined),wrapText:!!wrapCols[c]},border:borda};
+        }
+      }});
+    const totArr=new Array(NCOL).fill('');
+    totArr[13]='TOTAL GERAL';totArr[14]=totServ;totArr[15]=totPecas;totArr[16]=totalGeral;
+    XLSX.utils.sheet_add_aoa(ws,[totArr],{origin:{r:totRow,c:0}});
+    for(let c=0;c<NCOL;c++){
+      const cell=ws[XLSX.utils.encode_cell({r:totRow,c})];
+      if(cell){
+        if(c>=14&&c<=16){cell.t='n';cell.z='"R$" #,##0.00';}
+        cell.s={font:{bold:true,sz:10,color:{rgb:VERDE_ESC}},fill:{fgColor:{rgb:TOTAL_BG}},alignment:{horizontal:c===13?'right':(c>=14&&c<=16?'right':'left'),vertical:'center'},border:{top:{style:'medium',color:{rgb:VERDE}},bottom:{style:'thin',color:{rgb:VERDE_BORDA}},left:{style:'thin',color:{rgb:CINZA_BORDA}},right:{style:'thin',color:{rgb:CINZA_BORDA}}}};
+      }
+    }
+
+    /* Sheet 2 \u2014 Detalhamento de Pe\u00e7as (um sub-registro por pe\u00e7a de cada O.S.) */
+    const detHeaders=['C\u00f3digo da Tarefa','Data da O.S.','Unidade de Sa\u00fade','Equipamento Assistido','Descri\u00e7\u00e3o da Pe\u00e7a','Quantidade','Valor Unit\u00e1rio (R$)','Subtotal (R$)'];
+    const DNCOL=detHeaders.length;
+    const detRows=[];
+    dados.forEach(d=>{
+      const v=valoresCobranca(d);
+      const equipAssist=v.equipamento||((d.equipamento==='*'||!d.equipamento)?'':d.equipamento)||'';
+      const itens=(billingStore[d.codigo]&&billingStore[d.codigo].pecasItens)||[];
+      if(itens.length){
+        itens.forEach(it=>{const qtd=parseInt(it.qtd,10)||1,unit=parseMoedaBR(it.valor)||0;
+          detRows.push([d.codigo,formatDate(d.data),d.cliente,equipAssist,it.desc||'\u2014',qtd,unit,qtd*unit]);});
+      }else if(v.pecas>0){
+        detRows.push([d.codigo,formatDate(d.data),d.cliente,equipAssist,'Pe\u00e7as substitu\u00eddas (sem detalhamento por item)',1,v.pecas,v.pecas]);
+      }
+    });
+    const totDet=detRows.reduce((a,r)=>a+(r[7]||0),0);
+    const detTitulo=[['GRUPO LABMEDIC \u2014 Detalhamento de Pe\u00e7as por O.S.'],
+      ['Gerado em: '+new Date().toLocaleString('pt-BR')+'  \u2014  '+detRows.length+' item(ns) de pe\u00e7a  \u2014  Total: '+moedaBR(totDet)],[]];
+    const wsDet=detRows.length?XLSX.utils.aoa_to_sheet([...detTitulo,detHeaders,...detRows]):XLSX.utils.aoa_to_sheet([...detTitulo,detHeaders,['Nenhuma pe\u00e7a detalhada nos registros selecionados','','','','','','','']]);
+    wsDet['!cols']=[{wch:15},{wch:12},{wch:34},{wch:26},{wch:44},{wch:12},{wch:16},{wch:16}];
+    wsDet['!merges']=[0,1].map(r=>({s:{r,c:0},e:{r,c:DNCOL-1}}));
+    wsDet['!rows']=[{hpt:26},{hpt:15},{hpt:6}];
+    const dHdrRow=detTitulo.length,dFirstData=dHdrRow+1,dLastData=dHdrRow+Math.max(detRows.length,1);
+    wsDet['!autofilter']={ref:XLSX.utils.encode_range({s:{r:dHdrRow,c:0},e:{r:dLastData,c:DNCOL-1}})};
+    wsDet['!freeze']={xSplit:0,ySplit:dHdrRow+1};
+    const setCellD=(addr,style)=>{if(wsDet[addr])wsDet[addr].s=style;};
+    for(let c=0;c<DNCOL;c++){
+      setCellD(XLSX.utils.encode_cell({r:0,c}),{font:{bold:true,sz:14,color:{rgb:'FFFFFF'}},fill:{fgColor:{rgb:VERDE_ESC}},alignment:{horizontal:'left',vertical:'center'}});
+      setCellD(XLSX.utils.encode_cell({r:1,c}),{font:{italic:true,sz:10,color:{rgb:'475569'}},fill:{fgColor:{rgb:'F8FAFC'}},alignment:{horizontal:'left',vertical:'center'}});
+    }
+    detHeaders.forEach((_,c)=>setCellD(XLSX.utils.encode_cell({r:dHdrRow,c}),{font:{bold:true,sz:10,color:{rgb:'FFFFFF'}},fill:{fgColor:{rgb:VERDE}},alignment:{horizontal:'center',vertical:'center',wrapText:true},border:{top:{style:'thin',color:{rgb:VERDE_BORDA}},bottom:{style:'thin',color:{rgb:VERDE_BORDA}},left:{style:'thin',color:{rgb:VERDE_BORDA}},right:{style:'thin',color:{rgb:VERDE_BORDA}}}}));
+    if(detRows.length){
+      detRows.forEach((_,i)=>{const r=dFirstData+i,zebra=i%2===1;
+        for(let c=0;c<DNCOL;c++){
+          const money=c===6||c===7;
+          const cell=wsDet[XLSX.utils.encode_cell({r,c})];
+          if(cell){
+            if(money){cell.t='n';cell.z='"R$" #,##0.00';}
+            cell.s={font:{sz:10,color:{rgb:TEXTO}},fill:zebra?{fgColor:{rgb:ZEBRA}}:undefined,alignment:{vertical:'top',horizontal:money?'right':(c===5?'center':undefined),wrapText:c===4},border:borda};
+          }
+        }});
+      const dTotRow=dLastData+1;
+      const dTotArr=new Array(DNCOL).fill('');dTotArr[5]='TOTAL';dTotArr[7]=totDet;
+      XLSX.utils.sheet_add_aoa(wsDet,[dTotArr],{origin:{r:dTotRow,c:0}});
+      for(let c=0;c<DNCOL;c++){
+        const cell=wsDet[XLSX.utils.encode_cell({r:dTotRow,c})];
+        if(cell){
+          if(c===7){cell.t='n';cell.z='"R$" #,##0.00';}
+          cell.s={font:{bold:true,sz:10,color:{rgb:VERDE_ESC}},fill:{fgColor:{rgb:TOTAL_BG}},alignment:{horizontal:c===5?'right':(c===7?'right':'left'),vertical:'center'},border:{top:{style:'medium',color:{rgb:VERDE}},bottom:{style:'thin',color:{rgb:VERDE_BORDA}},left:{style:'thin',color:{rgb:CINZA_BORDA}},right:{style:'thin',color:{rgb:CINZA_BORDA}}}};
+        }
+      }
+    }
+
+    const wb=XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb,ws,'Resumo');
+    XLSX.utils.book_append_sheet(wb,wsDet,'Detalhamento de Pe\u00e7as');
+    XLSX.writeFile(wb,'cobrancas_planilha_detalhada.xlsx');
+    showToast(dados.length+' registro(s) e '+detRows.length+' sub-registro(s) de pe\u00e7as exportados para Excel','success');
+  }
+
+  /* ---- PDF profissional (fatura) para cada registro marcado para cobran\u00e7a ---- */
+  function gerarFaturasProfissionaisDoc(){
+    const dados=registrosCobranca();
+    if(!dados.length){showToast('Nenhum registro marcado para cobrança neste recorte','error');return;}
+    function fmtM(v){return (Number(v)||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});}
+    const today=new Date().toLocaleDateString('pt-BR');
+    const now=new Date();
+    const invoiceNum='FAT-LOTE-'+now.toISOString().slice(0,10).replace(/-/g,'')+'-'+dados.length+'REG';
+
+    /* Empresa emissora do documento consolidado: usa a do primeiro registro (padrão LABMEDIC) */
+    const primeiraEmpresaKey=(billingStore[dados[0].codigo]&&billingStore[dados[0].codigo].empresa)||'LABMEDIC';
+    const emp=EMPRESAS[primeiraEmpresaKey]||EMPRESAS['LABMEDIC'];
+    const empresasUsadas=new Set(dados.map(d=>(billingStore[d.codigo]&&billingStore[d.codigo].empresa)||'LABMEDIC'));
+
+    const clientesSet=new Set(dados.map(d=>d.cliente).filter(Boolean));
+    const tecnicosSet=new Set(dados.map(d=>d.tecnico).filter(Boolean));
+    const datasOS=dados.map(d=>d.data).filter(d=>d&&!isNaN(new Date(d).getTime()));
+    const dataMin=datasOS.length?new Date(Math.min(...datasOS.map(d=>new Date(d)))):null;
+    const dataMax=datasOS.length?new Date(Math.max(...datasOS.map(d=>new Date(d)))):null;
+    const periodoOS=(dataMin&&dataMax)?formatDate(dataMin)+' \u2014 '+formatDate(dataMax):'\u2014';
+
+    let grandTotal=0;
+    const itemRowsHtml=dados.map(d=>{
+      const b=billingStore[d.codigo]||{};
+      const vs=parseFloat(b.valorServico||0)||0;
+      const itens=(b.pecasItens&&b.pecasItens.length)?b.pecasItens:null;
+      const vp=itens?itens.reduce((a,it)=>a+((parseMoedaBR(it.valor)||0)*(parseInt(it.qtd,10)||1)),0):(parseFloat(b.valorPecas||0)||0);
+      const cats=d.categoria==='*'||!d.categoria?'N\u00e3o especificado':d.categoria;
+      const termos=d.termos==='*'||!d.termos?'':d.termos;
+      const pecaSubstituida=b.pecaSubstituida||(termos||cats);
+      const subtotalOS=vs+vp;
+      grandTotal+=subtotalOS;
+      let linhas='';
+      if(vs>0)linhas+=`<tr><td class="mono">${esc(d.codigo)}</td><td title="${esc(d.cliente)}">${esc(d.cliente)}</td><td>Servi\u00e7o Prestado \u2014 ${esc(d.tipo)}</td><td class="r">${fmtM(vs)}</td></tr>`;
+      if(itens){
+        itens.forEach(it=>{
+          const qtd=parseInt(it.qtd,10)||1,unit=parseMoedaBR(it.valor)||0,sub=qtd*unit;
+          linhas+=`<tr><td class="mono">${esc(d.codigo)}</td><td title="${esc(d.cliente)}">${esc(d.cliente)}</td><td>${esc(it.desc||'Pe\u00e7a')}${qtd>1?' <span style="color:#94a3b8;">(x'+qtd+')</span>':''}</td><td class="r">${sub>0?fmtM(sub):'\u2014'}</td></tr>`;
+        });
+      }else if(vp>0){
+        linhas+=`<tr><td class="mono">${esc(d.codigo)}</td><td title="${esc(d.cliente)}">${esc(d.cliente)}</td><td>Pe\u00e7as Substitu\u00eddas \u2014 ${esc(pecaSubstituida)}</td><td class="r">${fmtM(vp)}</td></tr>`;
+      }
+      if(!linhas)linhas=`<tr><td class="mono">${esc(d.codigo)}</td><td title="${esc(d.cliente)}">${esc(d.cliente)}</td><td colspan="2" style="color:#94a3b8;">Sem itens de cobran\u00e7a informados</td></tr>`;
+      linhas+=`<tr class="subtotal-row"><td colspan="3">Subtotal \u2014 O.S. ${esc(d.codigo)}</td><td class="r">${fmtM(subtotalOS)}</td></tr>`;
+      return linhas;
+    }).join('');
+
+    const registrosTableHtml=dados.map(d=>{
+      const b=billingStore[d.codigo]||{};
+      const equip=b.equipamento||(d.equipamento==='*'?'N\u00e3o informado':d.equipamento||'N\u00e3o informado');
+      return `<tr><td class="mono">${esc(d.codigo)}</td><td class="nowrap">${formatDate(d.data)}</td><td>${esc(d.cliente)}</td><td>${esc(d.tecnico)}</td><td>${esc(equip)}</td></tr>`;
+    }).join('');
+
+    const html=`<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><title>Fatura ${esc(invoiceNum)}</title>
+<style>
+  @page{margin:12mm 14mm;size:A4;}
+  *{margin:0;padding:0;box-sizing:border-box;}
+  body{font-family:'Segoe UI',Tahoma,Verdana,sans-serif;color:#1e293b;font-size:9pt;line-height:1.4;}
+  .invoice{max-width:100%;}
+
+  .hdr{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:14px;padding-bottom:10px;border-bottom:2px solid #059669;}
+  .hdr-company{flex:1;}
+  .hdr-company h1{font-size:12pt;color:#059669;font-weight:700;line-height:1.2;margin-bottom:2px;}
+  .hdr-company .cnpj{font-size:7.5pt;color:#64748b;margin-bottom:4px;}
+  .hdr-invoice{text-align:right;}
+  .hdr-invoice .fat-label{font-size:7pt;text-transform:uppercase;letter-spacing:.1em;color:#64748b;}
+  .hdr-invoice .fat-num{font-size:13pt;font-weight:700;color:#059669;}
+  .hdr-invoice .fat-date{font-size:8pt;color:#64748b;margin-top:2px;}
+
+  .info-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px 24px;margin-bottom:12px;}
+  .info-box{background:#f8fafc;border:1px solid #e2e8f0;border-radius:5px;padding:8px 10px;}
+  .info-box .ib-title{font-size:7pt;text-transform:uppercase;letter-spacing:.08em;color:#059669;font-weight:700;margin-bottom:4px;padding-bottom:3px;border-bottom:1px solid #e2e8f0;}
+  .info-box .ib-row{display:flex;gap:6px;margin-bottom:2px;font-size:8pt;}
+  .info-box .ib-row .ib-label{color:#64748b;min-width:70px;}
+  .info-box .ib-row .ib-val{font-weight:600;flex:1;word-break:break-word;}
+
+  .billing-sec{margin-bottom:10px;}
+  .billing-sec .bs-title{font-size:7pt;text-transform:uppercase;letter-spacing:.08em;color:#059669;font-weight:700;margin-bottom:5px;padding-bottom:3px;border-bottom:1px solid #e2e8f0;}
+  .bill-table{width:100%;border-collapse:collapse;font-size:8.5pt;}
+  .bill-table th{background:#f1f5f9;padding:5px 8px;text-align:left;font-size:7pt;text-transform:uppercase;letter-spacing:.05em;color:#475569;border-bottom:1px solid #e2e8f0;}
+  .bill-table th.r{text-align:right;}
+  .bill-table td{padding:5px 8px;border-bottom:1px solid #f1f5f9;}
+  .bill-table td.mono{font-family:'Courier New',monospace;font-size:7.5pt;white-space:nowrap;}
+  .bill-table td.nowrap{white-space:nowrap;}
+  .bill-table td.r{text-align:right;font-family:'Courier New',monospace;font-weight:600;}
+  .bill-table tr.subtotal-row td{background:#f8fafc;color:#64748b;font-weight:700;font-size:7.5pt;text-align:right;border-bottom:2px solid #e2e8f0;padding-top:4px;padding-bottom:6px;}
+  .bill-table tr.subtotal-row td:first-child{text-align:right;}
+  .bill-table tr.total-row td{border-top:2px solid #059669;border-bottom:none;font-weight:700;font-size:9.5pt;color:#059669;padding-top:6px;text-align:right;}
+  .bill-table tr.total-row td.r{font-size:10.5pt;}
+  tr{page-break-inside:avoid;}
+
+  .e-accept{margin-top:16px;padding:8px 10px;background:#f0fdf4;border:1px solid #bbf7d0;border-left:3px solid #059669;border-radius:0 4px 4px 0;display:flex;align-items:flex-start;gap:6px;}
+  .e-accept .ea-icon{color:#059669;font-size:9pt;margin-top:1px;}
+  .e-accept .ea-text{font-size:7.5pt;color:#334155;line-height:1.4;}
+
+  .footer{text-align:center;font-size:6.5pt;color:#94a3b8;margin-top:12px;padding-top:6px;border-top:1px solid #e2e8f0;}
+
+  @media print{body{print-color-adjust:exact;-webkit-print-color-adjust:exact;}}
+</style></head><body>
+<div class="invoice">
+  <div class="hdr">
+    <div class="hdr-company">
+      <h1>${esc(emp.nome)}</h1>
+      <div class="cnpj">CNPJ: ${esc(emp.cnpj)}</div>
+    </div>
+    <div class="hdr-invoice">
+      <div class="fat-label">Fatura de Cobran\u00e7a Consolidada</div>
+      <div class="fat-num">${esc(invoiceNum)}</div>
+      <div class="fat-date">Emitida em ${today}</div>
+    </div>
+  </div>
+
+  <div class="info-grid">
+    <div class="info-box">
+      <div class="ib-title">Resumo da Cobran\u00e7a</div>
+      <div class="ib-row"><span class="ib-label">Registros:</span><span class="ib-val">${dados.length} O.S.</span></div>
+      <div class="ib-row"><span class="ib-label">Unidades:</span><span class="ib-val">${clientesSet.size}</span></div>
+      <div class="ib-row"><span class="ib-label">T\u00e9cnicos:</span><span class="ib-val">${tecnicosSet.size}</span></div>
+    </div>
+    <div class="info-box">
+      <div class="ib-title">Per\u00edodo das O.S.</div>
+      <div class="ib-row"><span class="ib-label">Datas:</span><span class="ib-val">${periodoOS}</span></div>
+      ${empresasUsadas.size>1?`<div class="ib-row"><span class="ib-label">Empresas:</span><span class="ib-val">${esc([...empresasUsadas].join(', '))}</span></div>`:''}
+    </div>
+  </div>
+
+  <div class="billing-sec">
+    <div class="bs-title">Ordens de Servi\u00e7o Inclu\u00eddas Nesta Fatura</div>
+    <table class="bill-table">
+      <thead><tr><th>OS</th><th>Data</th><th>Unidade</th><th>T\u00e9cnico</th><th>Equipamento</th></tr></thead>
+      <tbody>${registrosTableHtml}</tbody>
+    </table>
+  </div>
+
+  <div class="billing-sec">
+    <div class="bs-title">Itens de Cobran\u00e7a \u2014 Servi\u00e7os e Pe\u00e7as Detalhadas</div>
+    <table class="bill-table">
+      <thead><tr><th style="width:90px;">OS</th><th>Unidade</th><th>Descri\u00e7\u00e3o</th><th class="r" style="width:110px;">Valor (R$)</th></tr></thead>
+      <tbody>
+        ${itemRowsHtml}
+        <tr class="total-row"><td colspan="3">Total Geral desta Fatura</td><td class="r">R$ ${fmtM(grandTotal)}</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="e-accept">
+    <span class="ea-icon">&#10003;</span>
+    <span class="ea-text">Assinatura e aceite eletr\u00f4nicos, conforme ordens de servi\u00e7o anexadas a esta fatura.</span>
+  </div>
+
+  <div class="footer">${esc(emp.nome)} \u2014 CNPJ ${esc(emp.cnpj)} &bull; Fatura consolidada gerada automaticamente em ${today}</div>
+</div>
+<script>window.onload=function(){setTimeout(function(){window.print();},500);}<\/script>
+</body></html>`;
+
+    const blob=new Blob([html],{type:'text/html'});const url=URL.createObjectURL(blob);
+    const win=window.open(url,'_blank');
+    if(!win)showToast('Permita pop-ups para visualizar a fatura em PDF','error');
+    else showToast('Fatura consolidada gerada com '+dados.length+' registro(s) \u2014 use Ctrl+P para salvar em PDF','success');
+  }
+
   function reimport(){allData=[];filteredData=[];currentPage=1;document.getElementById('dashboardScreen').classList.remove('active');document.getElementById('importScreen').classList.remove('hidden');fileInput.value='';}
 
   /* Toast */
@@ -2267,9 +2792,10 @@
   function esc(s){const d=document.createElement('div');d.textContent=s;return d.innerHTML;}
 
   /* Fechar modais */
-  document.addEventListener('keydown',e=>{if(e.key==='Escape'){if(document.getElementById('billingModal').classList.contains('active'))closeBillingModal();else if(document.getElementById('detailModal').classList.contains('active'))closeDetailModal();}});
+  document.addEventListener('keydown',e=>{if(e.key==='Escape'){if(document.getElementById('pecasDetailModal').classList.contains('active'))closeDetalhePecas();else if(document.getElementById('billingModal').classList.contains('active'))closeBillingModal();else if(document.getElementById('detailModal').classList.contains('active'))closeDetailModal();}});
   document.getElementById('detailModal').addEventListener('click',e=>{if(e.target===document.getElementById('detailModal'))closeDetailModal();});
   document.getElementById('billingModal').addEventListener('click',e=>{if(e.target===document.getElementById('billingModal'))closeBillingModal();});
+  document.getElementById('pecasDetailModal').addEventListener('click',e=>{if(e.target===document.getElementById('pecasDetailModal'))closeDetalhePecas();});
 </script>
 <div id="extractOverlay" role="status" aria-live="polite">
   <div class="prog-box">
