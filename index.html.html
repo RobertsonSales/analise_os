@@ -2122,22 +2122,21 @@
     return true;
   }
 
+  /* Ao gerar qualquer documento (PDF ou planilha), o modal de Precifica\u00e7\u00e3o permanece aberto
+     \u2014 a nova aba com o documento apenas se sobrep\u00f5e a ele. Fechar essa aba (ou cancelar a
+     impress\u00e3o) n\u00e3o deve afetar o modal; o usu\u00e1rio o fecha manualmente quando quiser. */
   function confirmarPrecosCobranca(){
     if(!validarEPersistirPrecos())return;
-    const action=pricesAction;
-    closePricesModal();
-    if(action==='pdf')gerarPDFCobrancasDoc();else exportarExcelCobrancasDoc();
+    if(pricesAction==='pdf')gerarPDFCobrancasDoc();else exportarExcelCobrancasDoc();
   }
 
   /* Bot\u00f5es extras do modal de Precifica\u00e7\u00e3o: documentos completos, incluindo os sub-registros de pe\u00e7as */
   function exportarExcelCobrancasDetalhado(){
     if(!validarEPersistirPrecos())return;
-    closePricesModal();
     exportarExcelCobrancasDetalhadoDoc();
   }
   function gerarFaturasProfissionaisPDF(){
     if(!validarEPersistirPrecos())return;
-    closePricesModal();
     gerarFaturasProfissionaisDoc();
   }
 
