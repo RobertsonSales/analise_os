@@ -1235,7 +1235,26 @@
     inp.value=String(d.codigo);
     osSuggestBox().classList.remove('show');
     document.getElementById('osSearchClear').classList.add('show');
+    /* Garante que a O.S. escolhida realmente apareça na listagem: limpa os demais filtros
+       (cliente, CNPJ, técnico, tipo, período, termos, status de cobrança), que de outra forma
+       poderiam continuar ativos e excluir o registro selecionado da tabela. */
+    document.getElementById('filterDateStart').value='';
+    document.getElementById('filterDateEnd').value='';
+    document.getElementById('filterCliente').value='';
+    document.getElementById('filterClienteSearch').value='';
+    document.getElementById('clienteClear').classList.remove('show');
+    document.getElementById('filterCnpj').value='';
+    document.getElementById('filterCnpjSearch').value='';
+    document.getElementById('cnpjClear').classList.remove('show');
+    document.getElementById('filterTecnico').value='';
+    document.getElementById('filterTipo').value='';
+    document.getElementById('searchTermos').value='';
+    document.getElementById('filterCobrado').value='';
+    document.getElementById('cobDateStart').value='';
+    document.getElementById('cobDateEnd').value='';
+    catFilter='';
     applyFilters();
+    showToast('Exibindo O.S. '+esc(String(d.codigo))+' \u2014 os demais filtros foram limpos para que o registro apare\u00e7a na listagem','info');
   }
   function clearSearchOS(skipApply){
     const inp=document.getElementById('searchOS');if(!inp)return;
