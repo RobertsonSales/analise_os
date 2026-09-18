@@ -654,6 +654,11 @@
           <input type="text" id="billingEquipamento" placeholder="Informe o equipamento que recebeu a assistência técnica">
         </div>
         <div class="form-group">
+          <label>Peça Substituída pelo Técnico</label>
+          <input type="text" id="billingPecaSubstituida" list="billingPecaSugestoes" placeholder="Informe a(s) peça(s) substituída(s) pelo técnico">
+          <datalist id="billingPecaSugestoes"></datalist>
+        </div>
+        <div class="form-group">
           <label>Nome de Quem Passa as Instruções</label>
           <input type="text" id="billingNome" placeholder="Informe o nome completo">
         </div>
@@ -1508,6 +1513,10 @@
     const saved=billingStore[d.codigo]||{};
     document.getElementById('billingEmpresa').value=saved.empresa||'LABMEDIC';
     document.getElementById('billingEquipamento').value=saved.equipamento||((d.equipamento&&d.equipamento!=='*')?d.equipamento:'');
+    const termosArr=(d.termos&&d.termos!=='*')?d.termos.split(';').map(t=>t.trim()).filter(Boolean):[];
+    const pecaSugerida=termosArr.join(', ');
+    document.getElementById('billingPecaSubstituida').value=(saved.pecaSubstituida!==undefined&&saved.pecaSubstituida!==null)?saved.pecaSubstituida:pecaSugerida;
+    document.getElementById('billingPecaSugestoes').innerHTML=termosArr.map(t=>`<option value="${esc(t)}"></option>`).join('')+(termosArr.length>1?`<option value="${esc(pecaSugerida)}"></option>`:'');
     document.getElementById('billingNome').value=saved.nome||BILLING_DEFAULT_NOME;
     document.getElementById('billingJustificativa').value=saved.justificativa||BILLING_DEFAULT_JUSTIFICATIVA;
     document.getElementById('billingValorServico').value=saved.valorServico||'';
@@ -1518,7 +1527,7 @@
   function closeBillingModal(){
     if(currentBillingIdx>=0){
       const d=allData[currentBillingIdx];
-      billingStore[d.codigo]={empresa:document.getElementById('billingEmpresa').value,equipamento:document.getElementById('billingEquipamento').value,nome:document.getElementById('billingNome').value,justificativa:document.getElementById('billingJustificativa').value,valorServico:document.getElementById('billingValorServico').value,valorPecas:document.getElementById('billingValorPecas').value};
+      billingStore[d.codigo]={empresa:document.getElementById('billingEmpresa').value,equipamento:document.getElementById('billingEquipamento').value,pecaSubstituida:document.getElementById('billingPecaSubstituida').value,nome:document.getElementById('billingNome').value,justificativa:document.getElementById('billingJustificativa').value,valorServico:document.getElementById('billingValorServico').value,valorPecas:document.getElementById('billingValorPecas').value};
     }
     document.getElementById('billingModal').classList.remove('active');
   }
@@ -1529,7 +1538,7 @@
   function generatePDF(){
     if(currentBillingIdx<0)return;
     const d=allData[currentBillingIdx];
-    const billing={empresa:document.getElementById('billingEmpresa').value,equipamento:document.getElementById('billingEquipamento').value.trim(),nome:document.getElementById('billingNome').value.trim(),justificativa:document.getElementById('billingJustificativa').value.trim(),valorServico:document.getElementById('billingValorServico').value,valorPecas:document.getElementById('billingValorPecas').value};
+    const billing={empresa:document.getElementById('billingEmpresa').value,equipamento:document.getElementById('billingEquipamento').value.trim(),pecaSubstituida:document.getElementById('billingPecaSubstituida').value.trim(),nome:document.getElementById('billingNome').value.trim(),justificativa:document.getElementById('billingJustificativa').value.trim(),valorServico:document.getElementById('billingValorServico').value,valorPecas:document.getElementById('billingValorPecas').value};
     billingStore[d.codigo]=billing;
     if(!billing.nome){showToast('Informe o nome de quem passa as instruções','error');document.getElementById('billingNome').focus();return;}
 
@@ -1639,6 +1648,7 @@
   <div class="details-compact">
     <div class="dc-grid">
       <div class="dc-item"><div class="dc-l">Categoria(s) de Peça</div><div class="dc-v">${esc(cats)}</div></div>
+      <div class="dc-item"><div class="dc-l">Peça Substituída</div><div class="dc-v">${esc(billing.pecaSubstituida||'Não informado')}</div></div>
       <div class="dc-item"><div class="dc-l">Termos Localizados</div><div class="dc-v">${esc(termos)}</div></div>
       <div class="dc-item"><div class="dc-l">Instruções por</div><div class="dc-v">${esc(billing.nome)}</div></div>
     </div>
@@ -1657,7 +1667,7 @@
       <thead><tr><th>Descrição</th><th class="r">Valor (R$)</th></tr></thead>
       <tbody>
         <tr><td>Serviço Prestado — ${esc(d.tipo)}</td><td class="r">${vs>0?fmtM(vs):'—'}</td></tr>
-        <tr><td>Peças Substituídas — ${esc(cats)}</td><td class="r">${vp>0?fmtM(vp):'—'}</td></tr>
+        <tr><td>Peças Substituídas — ${esc(billing.pecaSubstituida||cats)}</td><td class="r">${vp>0?fmtM(vp):'—'}</td></tr>
         <tr class="total-row"><td>Total</td><td class="r">${total>0?'R$ '+fmtM(total):'—'}</td></tr>
       </tbody>
     </table>
